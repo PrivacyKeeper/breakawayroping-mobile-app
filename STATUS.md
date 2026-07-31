@@ -77,11 +77,87 @@ This repo has migrations and docs only. No Expo scaffold yet.
 - **Minor-safety rules live in the database**, not the client. The privacy
   policy commits to them, so they hold regardless of which client writes.
 
+## Portfolio direction — decided 30 July 2026
+
+These are company-level decisions made after the Breakaway work above. They
+change what gets built next.
+
+### Two companies
+
+- **rodeoapps.pro** — parent for the eight rodeo apps: BarrelConnect, BullRider,
+  Breakaway, TeamRope, SaddleBronc, BarebackBronc, Bulldogging, TieDown,
+  RanchRodeo
+- **apps1llc.com** — everything non-rodeo: MarketCommand, Clay AI Coach, etc.
+
+### Option A chosen: ONE shared Supabase project for all rodeo apps
+
+Shared: identity, horses, arenas, associations, rule sets, organizations,
+events, entries, results, payments. Each app layers its own event-specific
+tables on top (`br_*`, `bc_*`, `td_*`).
+
+**This is not yet done.** Today BarrelConnect, BullRider, and Breakaway each
+have a separate Supabase project with a separate `profiles` table. A roper who
+runs barrels and ropes breakaway has two accounts and enters the same horse
+twice. Consolidating now costs a migration on two live apps; after eight apps
+ship it costs eight plus duplicate-account reconciliation.
+
+Migration scope: BarrelConnect (37 profiles, 178 posts, 15 horses, 104 tables),
+BullRider, and Breakaway (schema only, no users — the cheap one).
+
+### The endgame is a Procore/Toast for rodeo
+
+The eight apps are the foundation and the distribution channel. The Rodeo OS is
+the product producers run their business on. **The tenant is the producer**, not
+the contestant — which means an `organizations` table, staff with roles inside
+an org, and RLS scoped by tenant. Nothing has that today: BarrelConnect's
+`rodeo_events.producer_id` is a user, not an org, and Breakaway has no producer
+entity at all.
+
+Consequence worth planning for: if the OS runs entries and payouts, that is
+Stripe Connect with producers as connected accounts — moving other people's
+money. Breakaway's published terms already say entry fees are "collected on
+behalf of the producer."
+
+### Review of the two OS documents (30 July)
+
+`Rodeo_Apps_OS_Research.docx` and `RodeoApps_Architectur_PDF.pdf` were reviewed.
+Strategy and industry research are sound. Three unresolved conflicts:
+
+1. **RLS mechanism.** The architecture PDF §2.1 specifies
+   `current_setting('app.current_org_id')`. The handoff doc explicitly forbids
+   it — "no manual GUC" — and requires `auth.uid()`. The handoff is correct;
+   `current_setting` is not bound to the JWT and can be impersonated. Do not
+   build from the PDF's version.
+2. **Backend.** PDF specifies Node.js + Fastify + Drizzle (a real API server).
+   Handoff specifies no API server, direct Supabase with RLS. Different
+   architectures, not phases.
+3. **Schema scale.** PDF has full multi-tenancy with `org_members`, global
+   users, and `org_id` on every table. Handoff has 5 tables with a single
+   `orgs.owner_id` and contestants stored as plain text names. The 5-table
+   version cannot grow into the other without a rewrite.
+
+**Neither document accounts for BarrelConnect and BullRider existing.** They
+describe integrating with them "if approved," as though they were third parties.
+Building the OS on the 5-table schema would create a third divergent identity
+model immediately after deciding to eliminate the second.
+
 ## Open questions
 
+- **Which OS architecture is current** — Fastify API server, or direct Supabase
+  with `auth.uid()` RLS? The latter matches how everything else here is built.
+- **Does the OS build on the shared database, or the standalone 5-table
+  schema?** Recommend the former; that means reworking the schema before Day 1.
+- **The 31-defect "Architecture Fixes Summary" (F1–F31) has not been provided.**
+  The PDF on hand is labelled Version 1.0 while the research doc refers to
+  Architecture v2 as the version the defects were found in — so the PDF may be
+  superseded. This would explain the RLS conflict.
+- Website: `www` or apex as primary? Built `www`-primary; canonicals, sitemap,
+  and OG tags all assume it.
+- Google Search Console verification code for breakawayroping.pro.
 - Which BarrelConnect branch is the one to finish? There are 20+ remote
   branches (`development`, `feature/*`, `fix/*`, `integration/*`). Not touching
-  any of it until told which.
+  any of it until told which. `update-barrelconnect-mobile-app` currently holds
+  the update plan document only — no code changes.
 - Waitlist signups currently go to email only, no database. Worth a table now
   that Supabase exists?
 
