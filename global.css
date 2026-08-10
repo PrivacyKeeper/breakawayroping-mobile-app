@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "uniwind";
+
+/* Palette read from the shipped breakawayroping.pro stylesheet, so the app
+   matches the site a user just came from. */
+@theme {
+  --color-background: #070c15;
+  --color-surface: #0d1523;
+  --color-card: #111c2e;
+  --color-border: #23374f;
+  --color-text: #c8d4e4;
+  --color-muted: #8fa3bf;
+  --color-accent: #d4af37;
+  --color-accentAlt: #2eb3ec;
+  --color-cream: #f2e8d5;
+  --color-success: #4ba36b;
+  --color-warning: #d99a2b;
+  --color-danger: #c8503f;
+}

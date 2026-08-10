@@ -4,6 +4,9 @@ dist/
 web-build/
 *.log
 .env
-.env.*
-!.env.example
+.env.local
 .DS_Store
+ios/
+android/
+expo-env.d.ts
+uniwind-types.d.ts
