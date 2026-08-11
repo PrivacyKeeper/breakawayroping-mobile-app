@@ -1,12 +1,17 @@
 # App generator toolchain — recovery branch
 
-**This branch is a carrier, not part of the Breakaway app.** Delete it once the
-three apps below are pushed.
+**This branch is a carrier, not part of the Breakaway app. It has served its
+purpose — all seven apps are pushed. Safe to delete.**
 
 ## Why it exists
 
-Seven event apps were built in one session: Breakaway, TieDown, TeamRope,
-Bulldogging, SaddleBronc, BarebackBronc, RanchRodeo. Four reached GitHub:
+Seven event apps were built in one session. Partway through, the session's
+repository-attach service started dropping, and three apps were finished but
+could not be pushed — so this toolchain was committed as insurance against
+losing them with the container. The service recovered and all seven landed.
+Kept only because the branch could not be deleted through the git proxy.
+
+All seven are on `claude/build-apps-from-websites-4xhq0c` in their own repos:
 
 | App | Branch |
 |---|---|
@@ -14,17 +19,11 @@ Bulldogging, SaddleBronc, BarebackBronc, RanchRodeo. Four reached GitHub:
 | tiedown-mobile-app | `claude/build-apps-from-websites-4xhq0c` ✅ |
 | teamrope-mobile-app | `claude/build-apps-from-websites-4xhq0c` ✅ |
 | bulldogging-mobile-app | `claude/build-apps-from-websites-4xhq0c` ✅ |
-| **saddlebronc-mobile-app** | **not pushed** |
-| **barebackbronc-mobile-app** | **not pushed** |
-| **ranchrodeo-mobile-app** | **not pushed** |
+| saddlebronc-mobile-app | `claude/build-apps-from-websites-4xhq0c` ✅ |
+| barebackbronc-mobile-app | `claude/build-apps-from-websites-4xhq0c` ✅ |
+| ranchrodeo-mobile-app | `claude/build-apps-from-websites-4xhq0c` ✅ |
 
-The last three are complete, tested and committed, but the session's
-repository-attach service went down before they could be pushed, and both the
-git proxy and the GitHub API refuse repositories outside the session's
-authorised set. The code was in an ephemeral container, so this toolchain is
-committed here instead — it regenerates all three byte-for-byte.
-
-## Recovering the three apps
+## Regenerating any app from scratch
 
 ```bash
 git clone https://github.com/PrivacyKeeper/breakawayroping-mobile-app
@@ -42,9 +41,7 @@ for d in out/*-mobile-app; do (cd "$d" && node --test "src/**/*.test.ts"); done
 
 Expected: 71 passing, 0 failing across the seven.
 
-Then for each of the three missing apps, push its tree to its own repo on
-branch `claude/build-apps-from-websites-4xhq0c`. `gen/commit.sh` has the
-commit message already written for each one.
+`gen/commit.sh` holds the commit message written for each app.
 
 Note: `generate.js` emits a generic `001_core_identity_and_analysis.sql`.
 Breakaway already has identity, safety and rule-versioning live in Supabase
