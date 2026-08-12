@@ -1,171 +1,211 @@
-# BreakawayRoping.pro — status
+# RodeoApps — portfolio status
 
-Last updated: 30 July 2026
+Last updated: 12 August 2026
+
+This file is the portfolio's status of record. It lives in the Breakaway repo
+for historical reasons; it covers all nine apps, the Rodeo OS, and the
+decisions behind them.
+
+---
 
 ## Where things stand
 
-### Website — `breakawayroping-website` — **done and on `main`**
+### Nine event apps
 
-Commit `ad42fe6`. 21 routes, build green, lint clean.
+| App | Website | Mobile app | Notes |
+|---|---|---|---|
+| BarrelConnect | live | **shipped** | Has users. Team AI analysis in production. |
+| BullRider | live | **shipped** | StoreKit fix owned by Haseeb. |
+| Breakaway | live | scaffold | Supabase schema live, 34 tables |
+| TieDown | live | scaffold | |
+| TeamRope | live | scaffold | |
+| Bulldogging | live | scaffold | |
+| SaddleBronc | live | scaffold | |
+| BarebackBronc | live | scaffold | |
+| RanchRodeo | live | scaffold | |
 
-Landing page with 14 feature groups (121 individual features) adapted from the
-BarrelConnect screen inventory, `/rules` reference, `/events`, `/support`,
-7 SEO blog posts, terms / privacy / refund, `robots.ts`, `sitemap.ts`, JSON-LD
-for app + site + rules FAQ. Built to the BullRider.pro pattern: Next 16 App
-Router, Tailwind v4, Resend waitlist, no database, no auth.
+All seven scaffolds are on branch `claude/build-apps-from-websites-4xhq0c`
+in their own repos. Expo 55 + expo-router on the BarrelConnect pattern.
 
-**Blocked on you:**
+**71 rule-engine tests across the seven, all passing.** Run with `npm test` —
+no install, no device, no database. Every engine typechecks clean under
+`strict` + `noUncheckedIndexedAccess`.
 
-- `public/logo.png` and `public/cross.jpg` are referenced but not in the repo —
-  two broken image boxes until they are added. Optional:
-  `public/backgrounds/arena-1.jpg` and `arena-2.jpg` turn on the arena backdrop.
-- Vercel: import the repo, set `RESEND_API_KEY`, point `breakawayroping.pro`
-  at it. Make `www` primary and redirect the apex — every canonical URL and the
-  sitemap use `https://www.breakawayroping.pro`.
-- Resend: verify `breakawayroping.pro` as a sending domain, or the waitlist
-  cannot send from `support@breakawayroping.pro`.
+Each app has: five-tab scaffold, theme, Supabase client, the event rule
+engine, the run-analysis engine, and two migrations (identity/safety/rule
+versioning, then the event layer).
 
-### Supabase — **schema applied, 6 migrations**
+**What a scaffold is NOT:** there is no auth, no login screen, no session,
+and nothing writes to Supabase. Tabs render empty states. These are shells
+with a correct spine, not usable apps.
 
-Project `breakawayroping.pro`, ref `zocyoakcyrwdeugkjrgh`, `ca-central-1`.
-34 tables, RLS enabled on every one. See `supabase/migrations/README.md`.
+### BarrelConnect — AI run analysis
 
-Covers phases 0–2 of the build map plus the rule-versioning architecture the
-2026 addendum requires:
+Branch `claude/ai-run-analysis`, commit `aae1c89`. Pose-based run analysis
+measured against a walk-around benchmark. Six tables with RLS, the pose
+engine, services and hooks, and the coach-report engine swap.
 
-- Profiles with WPRA / NHSRA / NJHSRA / NLBRA / NIRA / PRCA membership fields
-- Guardian links with per-minor media, DM, and recruiting switches
-- Blocks, mutes, reports (harassment and unwanted contact called out explicitly)
-- Follows, posts, comments, likes, bookmarks, stories, notifications
-- Community groups — regional women's, junior, barn, team, school
-- Mentorships with two-sided consent and guardian approval
-- DMs and group chats
-- First-check board
-- Horses with `br_role`, `run_style`, `stop_rating`, `honest_in_box`, arena stats
-- Calves with speed / duck / stop flags
-- `br_practice_runs` — hand-timed, structurally cannot become official
-- `br_equipment_checks` — pass/fail derived from WPRA 12.10.9, not client-supplied
-- `rule_sets` / `rule_set_entries` / `rule_change_log` + `rules_for()`, seeded
-  with WPRA and PRCA 2026
+See `AI_RUN_ANALYSIS_HANDOFF.md` on that branch. Two pieces are deliberately
+not wired: no pose model is connected, and no equine pose model exists.
 
-**First thing to do here:** run `supabase db pull` to get migrations 003–006
-into version control. Right now the database is ahead of this repo. Details in
-`supabase/migrations/README.md`.
+### Rodeo OS — `PrivacyKeeper/Rodeo-OS`
 
-### Mobile app — **not started**
+Substantially built, contrary to what this file said on 30 July.
+41 tables, engine with 291 passing tests, API with 168 integration tests
+against real RLS, and a secretary interface that runs a rodeo end to end.
 
-This repo has migrations and docs only. No Expo scaffold yet.
+Missing: Stripe Connect (card rows sit `pending` forever), Supabase Auth in
+the UI (token pasted by hand), offline PWA, timer bridge, notices delivery
+worker. Roughly the last 10%.
 
-## Next up, in order
+`docs/PRICING.md` there settles the business model: free at Grassroots
+(≤100 entries/yr), $9.99 → $299/mo above that, nothing taken on the money
+flow. It also records why the 2%-per-entry model was modelled and rejected.
 
-1. `supabase db pull` so the repo matches the database
-2. Expo + Expo Router scaffold, §11 route tree, brand theme tokens
-3. `lib/scoring/breakaway` — `BR_PENALTIES`, `officialTime`, §12 edge cases as
-   tests. **Diff PRCA 2026 Parts 9 and 10 first**, per the addendum
-4. Events, entries, draws, divisional payouts (recompute whole class, never
-   increment)
-5. Producer console
+### Supabase
 
-## Decisions made, for the record
+Breakaway: project `zocyoakcyrwdeugkjrgh`, `ca-central-1`, 34 tables, RLS on
+every one, 6 migrations applied. **The database is ahead of the repo** —
+migrations 003-006 are live but not in version control. Run `supabase db
+pull` before applying anything new.
 
-- **Palette comes from the crest**, not the build map. Electric blue `#2eb3ec`,
-  rope gold `#d4af37`, cream `#f2e8d5` on near-black navy `#070c15`. The map
-  said "hot coral and gold on charcoal plum"; the real logo won.
-- **BarrelConnect's live schema is the spine**, since
-  `00_RODEOAPPS_SHARED_SPINE.md` was never provided. Its 104 tables were read
-  directly from the production database and the shared core adapted here.
-- **Minor-safety rules live in the database**, not the client. The privacy
-  policy commits to them, so they hold regardless of which client writes.
+---
 
-## Portfolio direction — decided 30 July 2026
+## Decisions on record
 
-These are company-level decisions made after the Breakaway work above. They
-change what gets built next.
+### Palettes come from the shipped websites, not the spine
 
-### Two companies
+Every app's colours were read out of its live site's CSS. The spine assigns
+different values. A user opening the app straight off the website should not
+feel a colour change, so the site wins — the same call recorded earlier for
+the Breakaway crest.
 
-- **rodeoapps.pro** — parent for the eight rodeo apps: BarrelConnect, BullRider,
-  Breakaway, TeamRope, SaddleBronc, BarebackBronc, Bulldogging, TieDown,
-  RanchRodeo
-- **apps1llc.com** — everything non-rodeo: MarketCommand, Clay AI Coach, etc.
+### One Supabase project for all rodeo apps (Option A)
 
-### Option A chosen: ONE shared Supabase project for all rodeo apps
+Decided 30 July, still the plan, **still not done**. Shared: identity,
+horses, arenas, associations, rule sets, organisations, events, entries,
+results, payments. Each app layers its own event tables (`br_*`, `td_*`, …).
 
-Shared: identity, horses, arenas, associations, rule sets, organizations,
-events, entries, results, payments. Each app layers its own event-specific
-tables on top (`br_*`, `bc_*`, `td_*`).
+Cost is part of it but not the main argument: a roper who runs barrels and
+ropes breakaway should have one account and enter the same horse once.
 
-**This is not yet done.** Today BarrelConnect, BullRider, and Breakaway each
-have a separate Supabase project with a separate `profiles` table. A roper who
-runs barrels and ropes breakaway has two accounts and enters the same horse
-twice. Consolidating now costs a migration on two live apps; after eight apps
-ship it costs eight plus duplicate-account reconciliation.
+Migration scope: BarrelConnect (37 profiles, 178 posts, 15 horses, 104
+tables), BullRider, and Breakaway (schema only, no users — the cheap one).
+Cost of waiting: eight apps plus duplicate-account reconciliation.
 
-Migration scope: BarrelConnect (37 profiles, 178 posts, 15 horses, 104 tables),
-BullRider, and Breakaway (schema only, no users — the cheap one).
+### The apps are contestant apps; the OS is the producer console
 
-### The endgame is a Procore/Toast for rodeo
+The spine gives every app its own producer console at phase 4. The Rodeo OS
+already IS that console, built and tested once. So the nine apps should
+consume it — events, entries, draw, results, standings — rather than each
+rebuilding it. **Not yet confirmed.** If the answer is no, every app needs
+its own event-operations layer, and that decision is cheap today and a
+rewrite in three months.
 
-The eight apps are the foundation and the distribution channel. The Rodeo OS is
-the product producers run their business on. **The tenant is the producer**, not
-the contestant — which means an `organizations` table, staff with roles inside
-an org, and RLS scoped by tenant. Nothing has that today: BarrelConnect's
-`rodeo_events.producer_id` is a user, not an org, and Breakaway has no producer
-entity at all.
+### Every rule is data
 
-Consequence worth planning for: if the OS runs entries and payouts, that is
-Stripe Connect with producers as connected accounts — moving other people's
-money. Breakaway's published terms already say entry fees are "collected on
-behalf of the producer."
+Penalty seconds, catch legality, loop counts, time limits and association
+variations all load from a `RulesProfile` bound to a dated rule set. Rodeo
+rules change annually and mid-season; the WPRA amends continuously. Anything
+hardcoded is wrong by October.
 
-### Review of the two OS documents (30 July)
+The barrier value is *required* rather than defaulted: USTRC is 5 seconds,
+PRCA is 10, and quietly guessing misprices every run in a class.
 
-`Rodeo_Apps_OS_Research.docx` and `RodeoApps_Architectur_PDF.pdf` were reviewed.
-Strategy and industry research are sound. Three unresolved conflicts:
+Every outcome carries its rule citation and edition, because contestants
+argue calls and are entitled to.
 
-1. **RLS mechanism.** The architecture PDF §2.1 specifies
-   `current_setting('app.current_org_id')`. The handoff doc explicitly forbids
-   it — "no manual GUC" — and requires `auth.uid()`. The handoff is correct;
-   `current_setting` is not bound to the JWT and can be impersonated. Do not
-   build from the PDF's version.
-2. **Backend.** PDF specifies Node.js + Fastify + Drizzle (a real API server).
-   Handoff specifies no API server, direct Supabase with RLS. Different
-   architectures, not phases.
-3. **Schema scale.** PDF has full multi-tenancy with `org_members`, global
-   users, and `org_id` on every table. Handoff has 5 tables with a single
-   `orgs.owner_id` and contestants stored as plain text names. The 5-table
-   version cannot grow into the other without a rewrite.
+### Fault codes are permanent
 
-**Neither document accounts for BarrelConnect and BullRider existing.** They
-describe integrating with them "if approved," as though they were third parties.
-Building the OS on the 5-table schema would create a third divergent identity
-model immediately after deciding to eliminate the second.
+The coach-side tally counts how many contestants share a fault, which only
+means something if the fault is named identically every time. Reword a label
+freely; never change what a code means. Retire it, add a new one, bump the
+taxonomy version.
+
+### Minor-safety rules live in the database
+
+Under-18 defaults to followers-only, enforced by trigger rather than by the
+signup screen, so it holds regardless of which client writes. Block and
+report are launch requirements, not phase two — App Store review rejects
+social apps without them.
+
+---
+
+## TestFlight — what it would actually take
+
+Apple Developer account is in hand. Beyond that:
+
+**Blocking, in order:**
+
+1. **Supabase consolidation.** Do it before seven apps have users, not after.
+2. **Auth.** No app has a login screen. This is the real blocker — everything
+   else is a feature on an app nobody can sign into.
+3. **One app working end to end.** Pick Breakaway. Sign-up, profile,
+   practice-run logging, one real Supabase write.
+4. **Icons and splash screens.** Every app has a background colour and no
+   image. TestFlight rejects a build with no icon.
+5. **`npm install` and a real Metro build.** The engines are tested but no app
+   has ever been bundled. Expect import/config fixes on the first build.
+6. **EAS.** `eas init` per app for a project ID, then `eas build -p ios
+   --profile production && eas submit`. `eas.json` already exists.
+
+**Apple's own gates, before review:**
+
+- Sign in with Apple, mandatory if any third-party login is offered
+- In-app account deletion, required, not built
+- Privacy policy URL and privacy manifest per app
+- Block and report UI on user-generated content
+
+**Corrections to the assumed list:**
+
+- **Stripe is not needed for TestFlight.** Ship free. When payments do land:
+  subscriptions go through RevenueCat/StoreKit on iOS, *never* Stripe.
+  Stripe is for entry fees and marketplace only, and the spine flags the App
+  Store risk — no `Linking.openURL` to a Stripe web page, native sheet only.
+  Stripe Connect belongs to the Rodeo OS (producers), not these apps.
+- **Weather is two pieces.** NWS API for US alerts is free and easy. Severe
+  alerts are supposed to be push, not poll, which needs Firebase/APNs — not
+  currently a dependency in any of the seven. Hourly forecast needs a paid
+  provider. GPS itself is just `expo-location`, an afternoon.
+
+**Recommendation:** do not put seven empty shells in TestFlight. Testers give
+you one first impression. Get Breakaway genuinely working, TestFlight it
+alone, then copy the working pattern outward.
+
+---
 
 ## Open questions
 
-- **Which OS architecture is current** — Fastify API server, or direct Supabase
-  with `auth.uid()` RLS? The latter matches how everything else here is built.
-- **Does the OS build on the shared database, or the standalone 5-table
-  schema?** Recommend the former; that means reworking the schema before Day 1.
-- **The 31-defect "Architecture Fixes Summary" (F1–F31) has not been provided.**
-  The PDF on hand is labelled Version 1.0 while the research doc refers to
-  Architecture v2 as the version the defects were found in — so the PDF may be
-  superseded. This would explain the RLS conflict.
-- Website: `www` or apex as primary? Built `www`-primary; canonicals, sitemap,
-  and OG tags all assume it.
-- Google Search Console verification code for breakawayroping.pro.
-- Which BarrelConnect branch is the one to finish? There are 20+ remote
-  branches (`development`, `feature/*`, `fix/*`, `integration/*`). Not touching
-  any of it until told which. `update-barrelconnect-mobile-app` currently holds
-  the update plan document only — no code changes.
-- Waitlist signups currently go to email only, no database. Worth a table now
-  that Supabase exists?
+- **Are the apps thin clients on the Rodeo OS?** Asked twice, not yet
+  answered. Shapes every app scaffold.
+- **Which OS architecture is current** — Fastify API server, or direct
+  Supabase with `auth.uid()` RLS? The latter matches how everything else here
+  is built and is what the OS repo actually implements.
+- **The 31-defect "Architecture Fixes Summary" (F1-F31) has never been
+  provided.** The OS repo's `docs/SPEC-DELTAS.md` records 40 defects found
+  independently; whether these are the same list is unknown.
+- **Patent scope.** The provisional (Apps 1 LLC, 31 May 2026) claims are all
+  scoped to clay target shooting. Claims 1 and 4 — skeletal-geometry
+  re-identification and multi-modal event detection — are the two whose
+  underlying methods are sport-agnostic and now deployed in a second sport
+  family. The 12-month window closes around 31 May 2027. Attorney question,
+  worth raising before these ship publicly.
+- BarrelConnect: which of the 20+ branches is the one to finish?
+- Waitlist signups go to email only, no database. Worth a table now?
 
-## Unrelated, but worth fixing
+---
 
-`barrelconnect-mobile-app` has `src/assets/keystore/barrel-connect.keystore`
-committed. That is the Android signing key — anyone with repo access can ship a
-build Play Store treats as authentic, and it cannot be rotated without breaking
-upgrades for installed users. Move it to EAS credentials. The `.env` next to it
-is low-risk by comparison since those are all `EXPO_PUBLIC_*` values that ship
-in the bundle anyway.
+## Housekeeping
+
+- `breakawayroping-mobile-app` has an orphan branch
+  `claude/app-generator-toolchain` — insurance taken while the repo-attach
+  service was dropping mid-build. All seven apps landed, so it has served its
+  purpose. **Safe to delete**; it stayed only because the git proxy refuses
+  branch deletion.
+- `barrelconnect-mobile-app` still has
+  `src/assets/keystore/barrel-connect.keystore` committed. That is the Android
+  signing key — anyone with repo access can ship a build Play Store treats as
+  authentic, and it cannot be rotated without breaking upgrades for installed
+  users. Move it to EAS credentials.
+- `BullRider-mobile-app` has not been reviewed. It is private and the
+  repo-attach service was down on every attempt.
