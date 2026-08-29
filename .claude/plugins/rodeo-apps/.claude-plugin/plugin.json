@@ -1,0 +1,13 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "rodeo-apps",
+  "version": "0.1.0",
+  "description": "Shared conventions for the Rodeo Apps portfolio: Supabase migration and RLS discipline, minor-safety rules that live in the database, breakaway scoring and rule versioning, the crest palette, and Next 16 SEO page structure.",
+  "author": {
+    "name": "Rodeo Apps",
+    "email": "support@breakawayroping.pro"
+  },
+  "skills": [
+    "./skills"
+  ]
+}

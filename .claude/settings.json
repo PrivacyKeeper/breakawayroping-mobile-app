@@ -45,5 +45,16 @@
       "mcp__Supabase__get_logs",
       "mcp__Supabase__search_docs"
     ]
+  },
+  "extraKnownMarketplaces": {
+    "rodeo-apps-marketplace": {
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  },
+  "enabledPlugins": {
+    "rodeo-apps@rodeo-apps-marketplace": true
   }
 }

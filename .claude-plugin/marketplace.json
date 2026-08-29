@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "rodeo-apps-marketplace",
+  "description": "Conventions for the Rodeo Apps portfolio \u2014 the Supabase, safety, scoring, brand, and site rules that apply across breakawayroping-website and breakawayroping-mobile-app.",
+  "owner": {
+    "name": "Rodeo Apps",
+    "email": "support@breakawayroping.pro"
+  },
+  "plugins": [
+    {
+      "name": "rodeo-apps",
+      "source": "./.claude/plugins/rodeo-apps",
+      "description": "Shared conventions for the Rodeo Apps portfolio: Supabase migrations and RLS, minor-safety rules enforced in the database, breakaway scoring and rule versioning, brand tokens, and Next 16 SEO structure."
+    }
+  ]
+}
