@@ -543,3 +543,184 @@ export async function listStandings(): Promise<Standing[]> {
     'Could not load the standings',
   );
 }
+
+// ---------------------------------------------------------------------------
+// Results
+// ---------------------------------------------------------------------------
+
+export type PublicResult = {
+  rodeo_id: string;
+  rodeo_name: string;
+  start_date: string;
+  venue_city: string | null;
+  venue_state: string | null;
+  event_type: string;
+  result_type: string;
+  go_round: number | null;
+  place: number | null;
+  tied_with: number | null;
+  aggregate_score: number | null;
+  payout_amount: number | null;
+  points_earned: number | null;
+  contestant_id: string;
+  first_name: string;
+  last_name: string;
+};
+
+/**
+ * Official placings for this app's events at one rodeo.
+ *
+ * Reads `public_results`, which is the only place a contestant's name crosses
+ * out of the private tables — name only, never contact details, and only once
+ * the rodeo is under way. Building this screen on `results` joined to `users`
+ * would have been the mistake delta D31 already caught once.
+ */
+export async function listRodeoResults(rodeoId: string): Promise<PublicResult[]> {
+  return unwrap(
+    await supabase
+      .from('public_results')
+      .select(
+        'rodeo_id, rodeo_name, start_date, venue_city, venue_state, event_type, result_type, go_round, place, tied_with, aggregate_score, payout_amount, points_earned, contestant_id, first_name, last_name',
+      )
+      .eq('rodeo_id', rodeoId)
+      .in('event_type', EVENT_CODES as string[])
+      .order('place', { ascending: true, nullsFirst: false })
+      .limit(200),
+    'Could not load the results',
+  );
+}
+
+/** This person's own official placings, newest first. */
+export async function listMyResults(profileId: string): Promise<PublicResult[]> {
+  return unwrap(
+    await supabase
+      .from('public_results')
+      .select(
+        'rodeo_id, rodeo_name, start_date, venue_city, venue_state, event_type, result_type, go_round, place, tied_with, aggregate_score, payout_amount, points_earned, contestant_id, first_name, last_name',
+      )
+      .eq('contestant_id', profileId)
+      .order('start_date', { ascending: false })
+      .limit(100),
+    'Could not load your results',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Notices — the inbox the draw notification lands in
+// ---------------------------------------------------------------------------
+
+export type Notice = {
+  id: number;
+  notice_type: string;
+  subject: string;
+  body: string;
+  rodeo_id: string | null;
+  created_at: string;
+  sent_at: string | null;
+};
+
+/**
+ * This person's notices.
+ *
+ * `notices` is an outbox: rows are written in the same transaction as the
+ * thing they announce and a worker delivers them. Reading it directly is what
+ * makes the in-app inbox work whether or not push was ever delivered — which
+ * matters, because push is exactly what fails in an arena.
+ */
+export async function listMyNotices(profileId: string): Promise<Notice[]> {
+  return unwrap(
+    await supabase
+      .from('notices')
+      .select('id, notice_type, subject, body, rodeo_id, created_at, sent_at')
+      .eq('user_id', profileId)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    'Could not load your notifications',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Waivers
+// ---------------------------------------------------------------------------
+
+export type WaiverTemplate = {
+  id: string;
+  org_id: string | null;
+  name: string;
+  waiver_type: string;
+  body_text: string;
+  version: number;
+};
+
+export type SignedWaiver = {
+  id: string;
+  waiver_template_id: string;
+  signed_at: string;
+  waiver_version: number;
+};
+
+/**
+ * Releases a producer requires, and which of them this person has signed.
+ *
+ * Readable at all only since 0027 (delta D42): the old policy denied a
+ * contestant the text of the one document whose signature has legal weight,
+ * because they are not a member of the producer's organisation.
+ */
+export async function listWaiversFor(orgId: string): Promise<WaiverTemplate[]> {
+  return unwrap(
+    await supabase
+      .from('waiver_templates')
+      .select('id, org_id, name, waiver_type, body_text, version')
+      .eq('org_id', orgId)
+      .eq('is_active', true)
+      .order('name'),
+    'Could not load the release',
+  );
+}
+
+export async function listMySignedWaivers(profileId: string): Promise<SignedWaiver[]> {
+  return unwrap(
+    await supabase
+      .from('signed_waivers')
+      .select('id, waiver_template_id, signed_at, waiver_version')
+      .eq('user_id', profileId)
+      .order('signed_at', { ascending: false })
+      .limit(100),
+    'Could not load your signed releases',
+  );
+}
+
+export type SignResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * Sign a release by typing your name.
+ *
+ * Goes through the `sign_waiver` function rather than inserting directly,
+ * because both hashes have to be computed from the stored template. A hash the
+ * signer's own phone produced proves nothing about what they saw, which is the
+ * entire argument of 0027 — the columns exist to be evidence, not decoration.
+ *
+ * `typed_name` rather than `click_to_sign`: a typed name is what makes this a
+ * signature a producer can point at later.
+ */
+export async function signWaiver(
+  orgId: string,
+  templateId: string,
+  profileId: string,
+  typedName: string,
+  rodeoId?: string | null,
+): Promise<SignResult> {
+  const { error } = await supabase.rpc('sign_waiver', {
+    p_org_id: orgId,
+    p_template_id: templateId,
+    p_user_id: profileId,
+    p_method: 'typed_name',
+    p_typed_name: typedName.trim(),
+    p_rodeo_id: rodeoId ?? null,
+  });
+
+  if (error) {
+    return { ok: false, message: `Could not record your signature: ${error.message}` };
+  }
+  return { ok: true };
+}

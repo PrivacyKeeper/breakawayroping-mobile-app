@@ -4,6 +4,7 @@
 // pays. This is the screen the map, weather and pin components were built for.
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Linking, Text, View } from 'react-native';
 
@@ -266,6 +267,30 @@ export function RodeoDetailScreen({ rodeoId }: { rodeoId: string }) {
                     </Card>
 
                     <EntryCard rodeo={rodeo} event={event} profileId={profileQuery.data?.id} />
+
+                    <Card
+                      title="Paperwork"
+                      subtitle="A producer cannot run you without a signed release. Sign it here and it goes on file with them."
+                    >
+                      <Button
+                        label="Releases"
+                        variant="secondary"
+                        onPress={() => router.push(`/waiver?rodeoId=${rodeo.id}`)}
+                      />
+                    </Card>
+
+                    {/* Results only exist once the rodeo is under way, and a
+                        link to an empty page reads as a broken feature. */}
+                    {['in_progress', 'completed', 'results_official', 'settled'].includes(
+                      rodeo.status,
+                    ) ? (
+                      <Card title="Results" subtitle="Official placings as the secretary finalises them.">
+                        <Button
+                          label="See the results"
+                          onPress={() => router.push(`/results?rodeoId=${rodeo.id}`)}
+                        />
+                      </Card>
+                    ) : null}
                     </View>
                   ) : null
                 }

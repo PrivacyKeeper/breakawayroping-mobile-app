@@ -8,3 +8,6 @@ export { RodeoDetailScreen } from './RodeoDetail';
 export { SignInScreen } from './SignIn';
 export { SignUpScreen } from './SignUp';
 export { ForgotPasswordScreen } from './ForgotPassword';
+export { ResultsScreen } from './Results';
+export { WaiverScreen } from './Waiver';
+export { NoticesScreen } from './Notices';

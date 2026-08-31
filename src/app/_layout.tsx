@@ -86,6 +86,9 @@ function RootNavigator() {
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="analyze" options={{ title: 'Run analysis' }} />
       <Stack.Screen name="rodeo/[id]" options={{ title: 'Rodeo' }} />
+      <Stack.Screen name="results" options={{ title: 'Results' }} />
+      <Stack.Screen name="waiver" options={{ title: 'Releases' }} />
+      <Stack.Screen name="notices" options={{ title: 'Notifications' }} />
     </Stack>
   );
 }
