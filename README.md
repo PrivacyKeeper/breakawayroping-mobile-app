@@ -68,7 +68,7 @@ path that is built but still needs a model.
 
 ## What is verified, and how
 
-Three layers, because no single one is enough:
+Four layers, because no single one is enough:
 
 - `npm run typecheck` — types.
 - `npm test` — the rule engine as pure functions, plus a schema guard that
@@ -80,8 +80,17 @@ Three layers, because no single one is enough:
   the shipping data layer over real HTTP against a strict local
   PostgREST double. It refuses unknown columns the way PostgREST does.
 
-What none of this proves is the real network hop with a real JWT and RLS
-enforced live. That needs a device or an unblocked host.
+- `npm run verify:live` — the real project. Everything above runs without
+  touching production, which is what makes it runnable anywhere and also
+  what it cannot prove: the real host, a real JWT, and RLS enforced
+  server-side. This script is that hop. It creates a throwaway account,
+  checks that sign-up provisions a contestant row, that RLS returns your own
+  rows and refuses everybody else's, that a forged official run is rejected,
+  and that the edge functions answer — then deletes the account. It needs a
+  `.env` and network access to the project; it does not need a device.
+
+What none of this proves is the UI on a handset, or push delivery, which
+needs a real device token. Both wait for TestFlight.
 
 ## Before TestFlight
 

@@ -40,6 +40,19 @@ export const app = {
    * whole point of this app missing.
    */
   eventCodes: ["breakaway_roping", "jr_breakaway"] as readonly string[],
+  /**
+   * What a run in this event is actually measured in.
+   *
+   * Roughstock is judged, not timed: a bronc ride is two judges marking the
+   * horse and the rider out of 25 each, and the eight seconds is a pass/fail
+   * gate rather than the result. Asking a bronc rider for "Time (seconds)" and
+   * filing their 82-point ride in `final_time` records the wrong number in the
+   * wrong column, and it reads back as an 82-second ride.
+   *
+   * "either" is for ranch rodeo, where the card is genuinely mixed — ranch
+   * bronc is judged and every other event on it is timed.
+   */
+  resultKind: "time" as "time" | "score" | "either",
   eventLabel: "Breakaway roping",
   tagline: "The fastest event in rodeo, measured against your own body.",
   associations: ["WPRA","NHSRA","NJHRA","NLBRA","NIRA","PRCA"] as readonly string[],

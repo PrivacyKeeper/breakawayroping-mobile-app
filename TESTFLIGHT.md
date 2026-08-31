@@ -66,9 +66,27 @@ built in blocks it at the egress policy. Verification instead covers:
   double.
 
 The untested part is the real network hop with a live JWT and RLS enforced
-server-side. **The first `eas build --profile production` is the thing that
-closes it.** Start with one app — the other six were propagated from
-tiedown and share the same data layer byte for byte.
+server-side.
+
+**`npm run verify:live` closes it in about ten seconds**, from anywhere with
+network access to the project:
+
+```
+npm run verify:live
+```
+
+It reads `.env`, creates a throwaway account, and checks the things only a
+real host can answer: that the API responds, that this app's event codes
+exist in `reference_options`, that sign-up fires the provisioning trigger,
+that RLS returns your own rows and refuses everybody else's, that a practice
+run writes and a forged official run is rejected, and that `analyse-run` and
+`delete-account` are deployed and answer. It deletes the account on the way
+out, so it is safe against production.
+
+Run it before the first build, not after. It does not cover the UI, and it
+does not cover push delivery — that needs a token from a real handset, so it
+waits for TestFlight. Start with one app; the other six share the same data
+layer.
 
 ## Deliberately not done
 

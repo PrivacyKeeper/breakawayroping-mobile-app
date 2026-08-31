@@ -233,6 +233,7 @@ describe('queries.ts over HTTP', () => {
       rodeoName: 'Home arena',
       runDate: '2026-08-30',
       timeSeconds: 8.4,
+      score: null,
     });
 
     const request = server.requests.at(-1);
@@ -243,6 +244,47 @@ describe('queries.ts over HTTP', () => {
     assert.equal(request.body.is_verified, false);
     assert.equal(request.body.org_id, null);
     assert.equal(request.body.event_code, EVENT_CODE);
+  });
+
+  test('a judged ride is written as a score, not as a time', async () => {
+    // The bug this pins: roughstock is marked out of 100 by two judges and the
+    // eight seconds is a pass/fail gate, not the result. Filing an 82-point
+    // ride in `final_time` records an 82-second run, and nothing downstream
+    // can tell that apart from a genuinely terrible time.
+    await queries.logPracticeRun('u1', {
+      rodeoName: 'Home arena',
+      runDate: '2026-08-30',
+      timeSeconds: null,
+      score: 82,
+    });
+
+    const request = server.requests.at(-1);
+    assert.equal(request.body.final_score, 82);
+    assert.equal(request.body.final_time, null);
+  });
+
+  test('a timed run leaves the score column empty', async () => {
+    await queries.logPracticeRun('u1', {
+      rodeoName: 'Home arena',
+      runDate: '2026-08-30',
+      timeSeconds: 8.4,
+      score: null,
+    });
+
+    const request = server.requests.at(-1);
+    assert.equal(request.body.final_time, 8.4);
+    assert.equal(request.body.final_score, null);
+  });
+
+  test('this app asks for the measurement its event is actually judged in', async () => {
+    // `resultKind` drives the label, the validation and the column, so it has
+    // to match what the scoring module models. A timed app that claimed to be
+    // judged would ask a tie-down roper for a score out of 100.
+    const theme = await import('../src/constants/theme.ts');
+    assert.ok(
+      ['time', 'score', 'either'].includes(theme.app.resultKind),
+      `resultKind is ${theme.app.resultKind}`,
+    );
   });
 
   test('enterRodeoEvent creates a pending, unpaid entry', async () => {

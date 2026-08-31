@@ -263,14 +263,26 @@ export async function listMyRuns(profileId: string): Promise<CareerRun[]> {
  */
 export async function logPracticeRun(
   profileId: string,
-  run: { rodeoName: string; runDate: string; timeSeconds: number | null; note?: string },
+  run: {
+    rodeoName: string;
+    runDate: string;
+    /** Seconds, for a timed event. Null on a judged one. */
+    timeSeconds: number | null;
+    /** Marked score out of 100, for a judged event. Null on a timed one. */
+    score: number | null;
+    note?: string;
+  },
 ): Promise<void> {
   const { error } = await supabase.from('career_runs').insert({
     contestant_id: profileId,
     rodeo_name: run.rodeoName.trim() || 'Practice',
     event_code: PRIMARY_EVENT_CODE,
     run_date: run.runDate,
+    // Both columns are written every time, one of them null. A judged ride
+    // filed in `final_time` reads back as an 82-second run, and nothing
+    // downstream can tell that apart from a genuinely terrible time.
     final_time: run.timeSeconds,
+    final_score: run.score,
     source: 'self_reported',
     is_verified: false,
     source_note: run.note?.trim() || 'Logged in the app',

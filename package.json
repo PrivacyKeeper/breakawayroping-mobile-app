@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test \"src/**/*.test.ts\" && node --import ./test/alias-loader-register.mjs --test --test-force-exit \"test/**/*.test.mjs\""
+    "test": "node --test \"src/**/*.test.ts\" && node --import ./test/alias-loader-register.mjs --test --test-force-exit \"test/**/*.test.mjs\"",
+    "verify:live": "node scripts/verify-live.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

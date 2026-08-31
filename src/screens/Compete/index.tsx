@@ -18,7 +18,7 @@ import { Field } from '@/components/ui/Field';
 import { QueryBoundary } from '@/components/ui/QueryBoundary';
 import { Screen } from '@/components/ui/Screen';
 import { Stat } from '@/components/ui/Stat';
-import { colors } from '@/constants/theme';
+import { app, colors } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import {
   getMyProfile,
@@ -42,17 +42,48 @@ function parseTime(input: string): { seconds: number } | { problem: string } {
   return { seconds };
 }
 
+/**
+ * Accepts "82" and "82.5". A marked score, not a time.
+ *
+ * Two judges mark the horse and the rider out of 25 each, so the ceiling is
+ * 100 and a real one is somewhere in the seventies or eighties. Zero is
+ * allowed on purpose: a buck-off is marked as no score, and a rider logging a
+ * zero is recording something true about their week.
+ */
+function parseScore(input: string): { score: number } | { problem: string } {
+  const trimmed = input.trim();
+  if (!trimmed) return { problem: 'Enter the score.' };
+  const score = Number(trimmed);
+  if (!Number.isFinite(score)) return { problem: 'Numbers only, like 82' };
+  if (score < 0) return { problem: 'A score cannot be negative.' };
+  if (score > 100) return { problem: 'Two judges mark 25 each — 100 is the ceiling.' };
+  return { score };
+}
+
+/**
+ * How a run is written down here follows the event, not the app template.
+ *
+ * "either" is ranch rodeo, where the card mixes a judged bronc ride with timed
+ * events, so the person logging it has to say which one this was.
+ */
 function LogRunForm({ profileId, onDone }: { profileId: string; onDone: () => void }) {
   const today = new Date().toISOString().slice(0, 10);
   const [where, setWhere] = useState('');
-  const [time, setTime] = useState('');
+  const [value, setValue] = useState('');
   const [runDate, setRunDate] = useState(today);
   const [note, setNote] = useState('');
   const [touched, setTouched] = useState(false);
+  // Only asked when the app covers both, and it starts on the judged one
+  // because that is the event ranch rodeo people call a "ride".
+  const [kind, setKind] = useState<'time' | 'score'>(
+    app.resultKind === 'time' ? 'time' : 'score',
+  );
   const queryClient = useQueryClient();
 
-  const parsed = parseTime(time);
-  const timeProblem = 'problem' in parsed ? parsed.problem : undefined;
+  const judged = app.resultKind === 'score' || (app.resultKind === 'either' && kind === 'score');
+
+  const parsed = judged ? parseScore(value) : parseTime(value);
+  const valueProblem = 'problem' in parsed ? parsed.problem : undefined;
   const dateOk = /^\d{4}-\d{2}-\d{2}$/.test(runDate);
 
   const create = useMutation({
@@ -61,6 +92,7 @@ function LogRunForm({ profileId, onDone }: { profileId: string; onDone: () => vo
         rodeoName: where,
         runDate,
         timeSeconds: 'seconds' in parsed ? parsed.seconds : null,
+        score: 'score' in parsed ? parsed.score : null,
         note,
       }),
     onSuccess: () => {
@@ -83,13 +115,37 @@ function LogRunForm({ profileId, onDone }: { profileId: string; onDone: () => vo
           placeholder="Home arena"
           hint="A practice pen counts. Leave it blank and it is filed as Practice."
         />
+        {app.resultKind === 'either' ? (
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Judged ride"
+                variant={kind === 'score' ? 'primary' : 'secondary'}
+                onPress={() => setKind('score')}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Timed event"
+                variant={kind === 'time' ? 'primary' : 'secondary'}
+                onPress={() => setKind('time')}
+              />
+            </View>
+          </View>
+        ) : null}
+
         <Field
-          label="Time (seconds)"
-          value={time}
-          onChangeText={setTime}
+          label={judged ? 'Score (out of 100)' : 'Time (seconds)'}
+          value={value}
+          onChangeText={setValue}
           keyboardType="decimal-pad"
-          placeholder="8.4"
-          error={touched ? timeProblem : undefined}
+          placeholder={judged ? '82' : '8.4'}
+          hint={
+            judged
+              ? 'Two judges, 25 for the horse and 25 for the rider each. A buck-off is a zero.'
+              : undefined
+          }
+          error={touched ? valueProblem : undefined}
         />
         <Field
           label="Date"
@@ -117,7 +173,7 @@ function LogRunForm({ profileId, onDone }: { profileId: string; onDone: () => vo
           label={create.isPending ? 'Saving…' : 'Save run'}
           onPress={() => {
             setTouched(true);
-            if (timeProblem || !dateOk) return;
+            if (valueProblem || !dateOk) return;
             create.mutate();
           }}
           disabled={create.isPending}
@@ -166,11 +222,24 @@ function EntryRow({ entry }: { entry: MyEntry }) {
   );
 }
 
+/**
+ * A run reads back in whatever it was measured in.
+ *
+ * The column is checked rather than the app's `resultKind`, because an official
+ * row arrives from the platform and a mixed card can carry either — ranch
+ * rodeo writes a judged bronc ride and a timed sorting run into the same list.
+ */
+function describeRun(run: CareerRun): string {
+  if (run.final_score !== null) return `${Number(run.final_score).toFixed(0)} points`;
+  if (run.final_time !== null) return `${Number(run.final_time).toFixed(2)}s`;
+  return app.resultKind === 'score' ? 'No score' : 'No time';
+}
+
 function RunRow({ run }: { run: CareerRun }) {
   const official = run.source !== 'self_reported';
   return (
     <Card
-      title={run.final_time !== null ? `${Number(run.final_time).toFixed(2)}s` : 'No time'}
+      title={describeRun(run)}
       subtitle={`${run.rodeo_name} · ${new Date(`${run.run_date}T00:00:00`).toLocaleDateString()}`}
     >
       <View style={{ flexDirection: 'row', gap: 24, alignItems: 'flex-start' }}>
