@@ -5,36 +5,37 @@ waste a review cycle. Ordered so the blocking items come first.
 
 ## Secrets that must be set
 
-These live on the shared Rodeo-OS Supabase project, under
-**Edge Functions → Secrets**. Nothing in the repo carries them.
+One, on the shared Rodeo-OS Supabase project, under
+**Edge Functions → Secrets**. Nothing in the repo carries it.
 
 | Secret | What breaks without it |
 |---|---|
-| `OPENAI_API_KEY` | `/analyze` returns a clear error instead of analysing. Nothing is faked. |
-| `PUSH_WORKER_SECRET` | `send-push` refuses every request, so notices are written and never delivered. It refuses rather than running open on purpose — an open sender is a spam relay carrying our identity. |
+| `OPENAI_API_KEY` | `/analyze` returns a clear error instead of analysing. Nothing is faked, and nothing else in the app is affected. |
 
-**The schedule that calls `send-push` already exists.** It is a pg_cron job on
-the database (`drain-push-outbox`, migration 0039), so there is no external
-cron to stand up. It runs every minute and does nothing at all until the
-worker secret is in Vault — no secret means no request, not a failed request a
-minute forever. The same when the queue is empty, which it usually is.
+That is the only one. It is a paid credential on somebody's account, so it
+cannot come from anywhere but you.
 
-So after setting `PUSH_WORKER_SECRET` above, store the same value where the
-caller can read it, once:
+**Push notifications need nothing.** They used to want a `PUSH_WORKER_SECRET`
+in the dashboard and an external cron to call the worker. Both are gone:
+the schedule is a pg_cron job on the database (`drain-push-outbox`, migration
+0039) and the secret is generated in the database and kept in Vault (0040), so
+no value is pasted anywhere and there is no second copy to drift out of sync.
+The path was verified end to end against the live project — a wrong secret is
+refused, the real one gets `{"sent":0,"failed":0}`.
 
-```sql
-select vault.create_secret('<the same value>', 'push_worker_secret',
-                           'Shared secret for the send-push worker');
-```
+The one thing still outstanding for push is an EAS project id, below, without
+which no handset can be issued a token to send to.
 
-Check the whole path with one query:
+If notifications ever go quiet, one query says why:
 
 ```sql
 select * from public.push_worker_status();
 ```
 
-It answers "why has nobody been notified?" — whether the secret is set, whether
-the schedule is running, how many notices are waiting, and what is stuck.
+It reports whether the secret is present, whether the schedule is running, how
+many notices are waiting, and what is stuck in `sending` because a worker died
+mid-flight — that last one is not retried automatically, because a duplicate
+draw notification is worse than a late one.
 
 ## Per-app `.env`
 
