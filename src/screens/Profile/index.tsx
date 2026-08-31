@@ -14,7 +14,7 @@ import { useSession } from '@/lib/auth';
 import { getMyProfile, updateMyProfile, type Profile } from '@/lib/queries';
 
 export function ProfileScreen() {
-  const { user, signOut } = useSession();
+  const { user, signOut, deleteAccount } = useSession();
   const queryClient = useQueryClient();
 
   const query = useQuery({
@@ -25,6 +25,8 @@ export function ProfileScreen() {
 
   const [draft, setDraft] = useState<Partial<Profile>>({});
   const [dirty, setDirty] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Seed the form once the profile arrives. Guarded on `dirty` so a background
   // refetch cannot overwrite something the user is halfway through typing —
@@ -148,6 +150,55 @@ export function ProfileScreen() {
                       { text: 'Stay signed in', style: 'cancel' },
                       { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
                     ])
+                  }
+                />
+              </Card>
+
+              {/*
+                Required to be reachable from inside the app by App Store
+                Guideline 5.1.1(v) — an email to support does not satisfy it.
+                Two taps and an explicit confirmation, because it cannot be
+                undone.
+              */}
+              <Card
+                title="Close your account"
+                subtitle={
+                  'This removes your name and contact details for good and signs you out permanently. ' +
+                  'Runs you logged and analyses you ran go with it. ' +
+                  'Placings and anything a producer paid you stay on their books — they have tax obligations for a year that has already closed, and those records will no longer carry your name.'
+                }
+              >
+                {deleteError ? (
+                  <Text style={{ color: colors.danger, fontSize: 13, lineHeight: 19 }}>
+                    {deleteError}
+                  </Text>
+                ) : null}
+                <Button
+                  label={deleting ? 'Closing…' : 'Close my account'}
+                  variant="secondary"
+                  disabled={deleting}
+                  onPress={() =>
+                    Alert.alert(
+                      'Close your account?',
+                      'This cannot be undone. Your details are removed and you will not be able to sign in again.',
+                      [
+                        { text: 'Keep my account', style: 'cancel' },
+                        {
+                          text: 'Close it',
+                          style: 'destructive',
+                          onPress: () => {
+                            setDeleting(true);
+                            setDeleteError(null);
+                            void deleteAccount().then((result) => {
+                              setDeleting(false);
+                              // On success the auth listener routes away; only
+                              // a failure needs saying out loud.
+                              if (!result.ok) setDeleteError(result.message);
+                            });
+                          },
+                        },
+                      ],
+                    )
                   }
                 />
               </Card>

@@ -47,6 +47,16 @@ type SessionValue = {
   ) => Promise<AuthResult>;
   sendPasswordReset: (email: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
+  /**
+   * Close the account for good.
+   *
+   * App Store Guideline 5.1.1(v) requires this to be reachable from inside the
+   * app, not an email to support. It is not a row delete: the ledger is
+   * append-only and a producer's tax obligation for a closed year outlives the
+   * account, so the server de-identifies the contestant and destroys the
+   * login. What is left points at money and cannot name anybody.
+   */
+  deleteAccount: () => Promise<AuthResult>;
 };
 
 const SessionContext = createContext<SessionValue | null>(null);
@@ -162,6 +172,48 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSession(null);
   }, []);
 
+  const deleteAccount = useCallback(async (): Promise<AuthResult> => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return { ok: false, message: 'Sign in again before closing your account.' };
+
+    const endpoint = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/delete-account`;
+
+    let response: Response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+    } catch {
+      return {
+        ok: false,
+        message: 'Could not reach the server. Closing an account needs signal — try again on a bar.',
+      };
+    }
+
+    let payload: { success?: boolean; error?: string } = {};
+    try {
+      payload = await response.json();
+    } catch {
+      return { ok: false, message: `The server returned an unexpected response (${response.status}).` };
+    }
+
+    if (!response.ok || !payload.success) {
+      return { ok: false, message: payload.error ?? 'The account could not be closed.' };
+    }
+
+    // The login is gone server-side; clear it here too rather than leaving a
+    // dead token in storage that fails on the next request.
+    setSession(null);
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Already revoked. Nothing to recover.
+    }
+    return { ok: true };
+  }, []);
+
   const value = useMemo<SessionValue>(
     () => ({
       session,
@@ -171,8 +223,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signUp,
       sendPasswordReset,
       signOut,
+      deleteAccount,
     }),
-    [session, loading, signIn, signUp, sendPasswordReset, signOut],
+    [session, loading, signIn, signUp, sendPasswordReset, signOut, deleteAccount],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

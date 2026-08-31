@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { colors } from '@/constants/theme';
 import { SessionProvider, useSession } from '@/lib/auth';
 
@@ -95,13 +96,15 @@ function RootNavigator() {
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <SessionProvider>
-        <SafeAreaProvider>
-          <StatusBar style="light" />
-          <RootNavigator />
-        </SafeAreaProvider>
-      </SessionProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <SessionProvider>
+          <SafeAreaProvider>
+            <StatusBar style="light" />
+            <RootNavigator />
+          </SafeAreaProvider>
+        </SessionProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
