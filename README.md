@@ -64,6 +64,13 @@ ranch bronc. Nothing errored; it was simply wrong in somebody's record months
 later. So the practice log and the analyser ask which event, and
 `src/lib/events.test.ts` fails the build if any module picks one by index.
 
+**The engine is on a screen.** `src/lib/rules.ts` hands the engine's own
+penalty table to the Rules screen — the same object the scorer applies, not a
+copy written for display, so the app cannot tell somebody one thing and score
+them by another. `src/lib/rules.test.ts` checks that by identity, and fails the
+build if no screen imports the engine at all: this app shipped for a while with
+a complete, tested rule engine that nothing ever called, and nothing failed.
+
 **`resultKind` is per event, because it varies within a card.** Roughstock is
 judged — two judges marking the horse and the rider out of 25 each, with the
 eight seconds a pass/fail gate rather than the result — and everything else is

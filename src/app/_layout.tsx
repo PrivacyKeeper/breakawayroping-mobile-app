@@ -129,6 +129,7 @@ function RootNavigator() {
       <Stack.Screen name="results" options={{ title: 'Results' }} />
       <Stack.Screen name="waiver" options={{ title: 'Releases' }} />
       <Stack.Screen name="notices" options={{ title: 'Notifications' }} />
+      <Stack.Screen name="rules" options={{ title: 'Rules' }} />
     </Stack>
   );
 }

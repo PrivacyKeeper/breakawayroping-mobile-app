@@ -150,6 +150,11 @@ export function HomeScreen() {
         subtitle="Record it, and the app measures the run against your own benchmark rather than against somebody else's idea of perfect."
       >
         <Button label="Open the analyser" onPress={() => router.push('/analyze')} />
+        <Button
+          label="What ends your run"
+          variant="secondary"
+          onPress={() => router.push('/rules')}
+        />
       </Card>
 
       <Card
