@@ -1,4 +1,8 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import { QueryClient, onlineManager } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Stack, router, useRootNavigationState, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -9,6 +13,21 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { colors } from '@/constants/theme';
 import { SessionProvider, useSession } from '@/lib/auth';
 
+/**
+ * Tell TanStack Query what "online" means on a phone.
+ *
+ * Without this it assumes the browser's navigator.onLine, which React Native
+ * does not have — so it treats the app as permanently online and retries into
+ * a void. NetInfo is the real answer, and it also means a query fired with no
+ * signal resumes by itself the moment a bar appears rather than sitting failed
+ * until somebody pulls to refresh.
+ */
+onlineManager.setEventListener((setOnline) =>
+  NetInfo.addEventListener((state) => {
+    setOnline(Boolean(state.isConnected && state.isInternetReachable !== false));
+  }),
+);
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -16,8 +35,28 @@ const queryClient = new QueryClient({
       // cached data rather than a spinner whenever we plausibly can.
       staleTime: 60_000,
       retry: 2,
+      // Kept for a day so the cache survives being restored from disk. Without
+      // a gcTime at least as long as the persister's maxAge, a rehydrated
+      // query is collected before it can be shown.
+      gcTime: 1000 * 60 * 60 * 24,
     },
   },
+});
+
+/**
+ * The cache, written to disk.
+ *
+ * This is what makes the app usable standing in an arena with no signal: the
+ * draw, the entry list and the rodeo you looked at ten minutes ago are all
+ * still there. It is the difference between an app that is empty without a
+ * connection and one that is merely out of date, and out of date is worth a
+ * great deal more.
+ */
+const persister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: 'rodeo-query-cache',
+  // A write on every cache change would thrash the disk on a list screen.
+  throttleTime: 2_000,
 });
 
 /**
@@ -97,14 +136,25 @@ function RootNavigator() {
 export default function RootLayout() {
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
+      <PersistQueryClientProvider
+        client={queryClient}
+        persistOptions={{
+          persister,
+          maxAge: 1000 * 60 * 60 * 24,
+          dehydrateOptions: {
+            // Only successful queries are worth restoring. Persisting an error
+            // would show yesterday's failure as though it were today's.
+            shouldDehydrateQuery: (query) => query.state.status === 'success',
+          },
+        }}
+      >
         <SessionProvider>
           <SafeAreaProvider>
             <StatusBar style="light" />
             <RootNavigator />
           </SafeAreaProvider>
         </SessionProvider>
-      </QueryClientProvider>
+      </PersistQueryClientProvider>
     </ErrorBoundary>
   );
 }

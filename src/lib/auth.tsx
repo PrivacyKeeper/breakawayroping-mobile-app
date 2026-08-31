@@ -30,6 +30,7 @@ import {
   type ReactNode,
 } from 'react';
 
+import { registerForPush, unregisterPush } from '@/lib/push';
 import { supabase } from '@/lib/supabase';
 
 export type AuthResult = { ok: true } | { ok: false; message: string };
@@ -111,10 +112,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     // Fires on sign-in, sign-out, and every token refresh, including refreshes
     // that happen while the app is backgrounded.
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, next) => {
       if (!active) return;
       setSession(next);
       setLoading(false);
+
+      // Registered here rather than at launch: iOS grants exactly one shot at
+      // the notification prompt, so it is asked once somebody has an account
+      // and a reason to want the draw — not in front of a login screen. Fire
+      // and forget; a declined prompt is a worse app, not a broken one.
+      if (event === 'SIGNED_IN' && next) {
+        void registerForPush().then((result) => {
+          if (!result.ok && result.reason === 'error') {
+            console.warn('[push] could not register this device', result.message);
+          }
+        });
+      }
     });
 
     return () => {
@@ -163,6 +176,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Before the session goes, or the delete has no credentials to authorise
+    // it. Leaving the token behind would send the next person to sign in on a
+    // shared phone the previous contestant's draw.
+    await unregisterPush();
     try {
       await supabase.auth.signOut();
     } catch (error) {
