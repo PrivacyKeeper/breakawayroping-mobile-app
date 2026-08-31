@@ -13,9 +13,28 @@ These live on the shared Rodeo-OS Supabase project, under
 | `OPENAI_API_KEY` | `/analyze` returns a clear error instead of analysing. Nothing is faked. |
 | `PUSH_WORKER_SECRET` | `send-push` refuses every request, so notices are written and never delivered. It refuses rather than running open on purpose — an open sender is a spam relay carrying our identity. |
 
-Then schedule `send-push` (a cron hitting the function with
-`x-worker-secret`). Without the schedule the outbox fills and nothing drains
-it.
+**The schedule that calls `send-push` already exists.** It is a pg_cron job on
+the database (`drain-push-outbox`, migration 0039), so there is no external
+cron to stand up. It runs every minute and does nothing at all until the
+worker secret is in Vault — no secret means no request, not a failed request a
+minute forever. The same when the queue is empty, which it usually is.
+
+So after setting `PUSH_WORKER_SECRET` above, store the same value where the
+caller can read it, once:
+
+```sql
+select vault.create_secret('<the same value>', 'push_worker_secret',
+                           'Shared secret for the send-push worker');
+```
+
+Check the whole path with one query:
+
+```sql
+select * from public.push_worker_status();
+```
+
+It answers "why has nobody been notified?" — whether the secret is set, whether
+the schedule is running, how many notices are waiting, and what is stuck.
 
 ## Per-app `.env`
 
