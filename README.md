@@ -25,7 +25,14 @@ src/app/            expo-router routes. Thin — each one renders a screen.
 src/screens/        Screen components, one folder each.
 src/components/ui/  Shared UI.
 src/lib/scoring/    THE RULE ENGINE. Pure functions, unit tested.
-src/lib/pose/       On-device run analysis.
+src/lib/pose/       On-device analysis engine (no pose model wired yet).
+src/lib/analysis.ts Video run analysis via the analyse-run Edge Function.
+src/lib/auth.tsx    Session, sign in/up/out, account deletion.
+src/lib/queries.ts  Every read and write, in one file.
+src/lib/push.ts     Device registration for draw notifications.
+test/               Integration tests against a local PostgREST double.
+src/constants/      Theme and app identity.
+supabase/migrations/
 src/constants/      Theme and app identity.
 supabase/migrations/
 ```
@@ -48,9 +55,34 @@ Sanctioning bodies that matter here: PRCA, NIRA, NHSRA.
 
 ## Run analysis
 
-The rider records a walk-around benchmark of herself and the horse
-standing still, then films runs. Runs are measured as deviation from that
-benchmark, on the phone. Only the numbers are uploaded; video stays on the
-device unless it is explicitly shared.
+Pick a clip of one run. The app extracts twelve keyframes, uploads only
+those, and a vision model returns a structured breakdown — a mark per
+phase, coded faults with evidence, key moments. The video never leaves the
+phone.
 
-See `AI_ANALYSIS.md` for what is wired and what still needs a model.
+The model chooses fault codes from this event's own fixed taxonomy; it
+cannot invent a category. That is what makes a coach report countable.
+
+See `AI_ANALYSIS.md` for how it works, and for the separate on-device pose
+path that is built but still needs a model.
+
+## What is verified, and how
+
+Three layers, because no single one is enough:
+
+- `npm run typecheck` — types.
+- `npm test` — the rule engine as pure functions, plus a schema guard that
+  checks every column, filter and write in `queries.ts` against a snapshot
+  of the live database. A select string is just a string; TypeScript
+  cannot see inside one, and a wrong column is a 400 at runtime on one
+  screen for every user.
+- `npm test` also runs `test/queries.integration.test.mjs`, which drives
+  the shipping data layer over real HTTP against a strict local
+  PostgREST double. It refuses unknown columns the way PostgREST does.
+
+What none of this proves is the real network hop with a real JWT and RLS
+enforced live. That needs a device or an unblocked host.
+
+## Before TestFlight
+
+See `TESTFLIGHT.md`.

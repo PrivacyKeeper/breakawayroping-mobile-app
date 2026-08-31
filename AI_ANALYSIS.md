@@ -39,27 +39,80 @@ what a code means. Retire it, add a new one, bump the taxonomy version.
 - `baseline.ts` — capture to baseline, folding repeat captures together
 - `judge.ts` — measurements to coded faults, and faults to a coach tally
 - `event.ts` — this event’s feature vector and fault taxonomy
-## What is NOT wired
-**No pose model is connected.** The engine consumes `PoseFrame[]` and
-nothing currently produces them — there is no pose dependency in
-`package.json`. This needs a VisionCamera frame processor with a TFLite
-MoveNet or BlazePose model. Clay AI Coach’s `src/native/PoseDetector.ts`
-is the closest working reference and should port with a model swap.
+## How it works today
+
+Analysis runs through the `analyse-run` Edge Function on the shared
+Rodeo-OS project, using the pattern already proven in BarrelConnect:
+
+1. You pick a clip of one run. It stays on the phone.
+2. The app extracts twelve keyframes with `expo-video-thumbnails` and
+   uploads only those — a few hundred kilobytes instead of a few hundred
+   megabytes, which is what makes this work on arena wifi.
+3. The function sends them to a vision model under a **strict JSON
+   schema** and stores the structured result in `run_video_analyses`.
+4. `/analyze` renders it: an overall mark, a score and note per phase,
+   coded faults with the evidence behind each, and key moments.
+
+**The model selects fault codes; it never invents them.** The schema
+supplies this event's codes as an `enum`, taken directly from
+`src/lib/pose/event.ts` — the same list this app labels them with. That
+is what keeps a coach report countable: ask a model to describe runs
+freely and one fault comes back three ways across three contestants,
+tallying as three separate one-person problems. It still writes the
+paragraph a human reads. It does not decide what happened.
+
+A code with no local label renders as the raw code rather than being
+hidden. A fault the roper cannot see is worse than an ugly one, and it is
+the only way anybody would notice the two lists drifting apart.
+
+**Keep the codes in step.** `supabase/functions/analyse-run/events.ts` in
+Rodeo-OS holds the server's copy. Adding a fault here means adding it
+there in the same change, or the model can never emit it.
+
+## What the pose engine is still for
+
+`src/lib/pose/` is not dead code, and it is not what `/analyze` calls
+today. It is the on-device path: capture guidance, a geometric identity
+embedding, baseline building, and a judge that turns measurements into
+the same coded faults. It consumes `PoseFrame[]` and nothing produces
+them yet.
+
+**No pose model is connected.** This needs a VisionCamera frame processor
+with a TFLite MoveNet or BlazePose model. Clay AI Coach's
+`src/native/PoseDetector.ts` is the closest working reference and should
+port with a model swap.
+
 **No animal pose model exists.** MoveNet and BlazePose do not detect
 quadrupeds and there is no drop-in. `horse.ts` defines the seam:
 `registerHorsePoseAdapter()`. Until one is registered,
-`horseAvailable()` returns false, the pipeline runs contestant-only,
-and animal-attributed faults are simply not emitted. Nothing breaks
-and nothing is faked — **check `horseAvailable()` before showing an
-animal report rather than rendering an empty one.**
+`horseAvailable()` returns false, the pipeline runs contestant-only, and
+animal-attributed faults are simply not emitted. Nothing breaks and
+nothing is faked — **check `horseAvailable()` before showing an animal
+report rather than rendering an empty one.**
 
-The benchmark makes this much cheaper than it looks: locating a
-horse’s joints mid-run at speed is hard, locating them once on a
-still animal from a dozen angles is not, and `trackFromSeeds()`
-turns the run-time problem into following points already found.
+The benchmark makes this much cheaper than it looks: locating a horse's
+joints mid-run at speed is hard, locating them once on a still animal
+from a dozen angles is not, and `trackFromSeeds()` turns the run-time
+problem into following points already found.
+
+The two paths are complementary rather than competing. The vision model
+reads a run the way a coach watching from the fence would. The pose
+engine measures against the contestant's own geometry, works with no
+signal, and costs nothing per run. When a model is connected, the
+existing taxonomy means both emit the same codes.
+
 **Thresholds are unfitted.** The values in `event.ts` come from coaching
 convention, not from data. They are deliberately data rather than logic —
 once there are enough measured runs with results attached they should be
 fitted against what actually produced good ones. That is why measuring
 and judging are separate functions: refitting must not require
 recomputing history.
+
+## What it costs to run
+
+Each analysis is one vision call over twelve images. `OPENAI_API_KEY`
+must be set in the Rodeo-OS project under Edge Functions → Secrets, or
+the function returns a clear error and the screen says so. There is no
+free fallback and nothing is faked: an analyser that invented a score
+because a key was missing would be worse than one that said it could not
+run.
