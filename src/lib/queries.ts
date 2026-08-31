@@ -402,3 +402,144 @@ export async function enterRodeoEvent(
 
   return { ok: true, entryId: data.id };
 }
+
+// ---------------------------------------------------------------------------
+// The draw
+// ---------------------------------------------------------------------------
+
+export type MyDraw = {
+  id: string;
+  go_round: number | null;
+  performance: number | null;
+  is_redraw: boolean;
+  redraw_reason: string | null;
+  entries: { rodeo_id: string; draw_position: number | null } | null;
+  animals: {
+    name: string;
+    brand_number: string | null;
+    animal_type: string;
+    career_stats: Record<string, unknown> | null;
+  } | null;
+};
+
+/**
+ * What this person drew, wherever they are entered.
+ *
+ * Readable at all only since 0034: `stock_draws_member_read` was
+ * org-members-only, so the message `notify_draw_posted()` sends — "the draw is
+ * up" — pointed at a row the recipient could not open.
+ */
+export async function listMyDraws(profileId: string): Promise<MyDraw[]> {
+  return unwrap(
+    await supabase
+      .from('stock_draws')
+      .select(
+        'id, go_round, performance, is_redraw, redraw_reason, entries!inner(rodeo_id, draw_position, contestant_id), animals(name, brand_number, animal_type, career_stats)',
+      )
+      .eq('entries.contestant_id', profileId)
+      .order('go_round', { ascending: true })
+      .limit(50),
+    'Could not load your draw',
+  ) as unknown as MyDraw[];
+}
+
+// ---------------------------------------------------------------------------
+// Partners
+// ---------------------------------------------------------------------------
+
+export type PartnerEntry = {
+  id: string;
+  rodeo_id: string;
+  status: string;
+  entered_at: string;
+  header_number: number | null;
+  heeler_number: number | null;
+  combined_number: number | null;
+  division_name: string | null;
+  partner_id: string | null;
+  contestant_id: string;
+  rodeos: { name: string; start_date: string } | null;
+};
+
+/**
+ * Everyone this person has entered with, most recent first.
+ *
+ * A team roper's partner history is the thing they actually track — who you
+ * are drawn with, what you were entered on, and how the pair did. Both sides
+ * are matched because the row is the same entry whichever end you roped.
+ */
+export async function listMyPartnerEntries(profileId: string): Promise<PartnerEntry[]> {
+  return unwrap(
+    await supabase
+      .from('entries')
+      .select(
+        'id, rodeo_id, status, entered_at, header_number, heeler_number, combined_number, division_name, partner_id, contestant_id, rodeos(name, start_date)',
+      )
+      .or(`contestant_id.eq.${profileId},partner_id.eq.${profileId}`)
+      .not('partner_id', 'is', null)
+      .order('entered_at', { ascending: false })
+      .limit(60),
+    'Could not load your partners',
+  ) as unknown as PartnerEntry[];
+}
+
+/**
+ * Names for a set of contestant ids.
+ *
+ * Goes through `search_people` rather than selecting from `users`, because a
+ * partner is not necessarily somebody this app can read directly — and the
+ * point of that function is that it returns a name and almost nothing else.
+ * Falls back silently: a partner shown as "Roping partner" is worse than a
+ * screen that failed to load.
+ */
+export async function namesFor(ids: string[]): Promise<Record<string, string>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (unique.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, first_name, last_name')
+    .in('id', unique);
+
+  if (error || !data) return {};
+  return Object.fromEntries(
+    data.map((u) => [u.id, `${u.first_name} ${u.last_name}`.trim()]),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Standings
+// ---------------------------------------------------------------------------
+
+export type Standing = {
+  contestant_id: string;
+  first_name: string;
+  last_name: string;
+  event_type: string;
+  total_points: number | null;
+  total_earnings: number | null;
+  rodeos_entered: number | null;
+  sanctioning_body: string | null;
+  season: string | null;
+};
+
+/**
+ * Season standings for this app's events.
+ *
+ * Reads `public_standings`, which aggregates over `public_results` — the one
+ * place a contestant's name crosses out of the private tables, and only for
+ * official placings at a rodeo already under way.
+ */
+export async function listStandings(): Promise<Standing[]> {
+  return unwrap(
+    await supabase
+      .from('public_standings')
+      .select(
+        'contestant_id, first_name, last_name, event_type, total_points, total_earnings, rodeos_entered, sanctioning_body, season',
+      )
+      .in('event_type', EVENT_CODES as string[])
+      .order('total_earnings', { ascending: false, nullsFirst: false })
+      .limit(100),
+    'Could not load the standings',
+  );
+}
