@@ -6,10 +6,12 @@ module.exports = {
     slug: "breakawayroping",
     scheme: "breakawayroping",
     version: '0.1.0',
+    icon: './assets/icon.png',
     orientation: 'portrait',
     userInterfaceStyle: 'dark',
     newArchEnabled: true,
     splash: {
+      image: './assets/splash.png',
       resizeMode: 'contain',
       backgroundColor: "#070c15",
     },
@@ -31,6 +33,7 @@ module.exports = {
     android: {
       package: "pro.breakawayroping.app",
       adaptiveIcon: {
+        foregroundImage: './assets/adaptive-icon.png',
         backgroundColor: "#070c15",
       },
       edgeToEdgeEnabled: true,
@@ -41,7 +44,7 @@ module.exports = {
         },
       },
     },
-    web: { bundler: 'metro', output: 'static' },
+    web: { bundler: 'metro', output: 'static', favicon: './assets/favicon.png' },
     plugins: [
       'expo-router',
       'expo-video',

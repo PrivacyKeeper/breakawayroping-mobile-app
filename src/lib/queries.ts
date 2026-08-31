@@ -34,6 +34,7 @@ export const PRIMARY_EVENT_CODE = appMeta.eventCodes[0];
 
 export type RodeoSummary = {
   id: string;
+  org_id: string;
   name: string;
   slug: string | null;
   start_date: string;
@@ -46,6 +47,11 @@ export type RodeoSummary = {
   status: string;
   entry_close_date: string | null;
   total_added_money: number | null;
+  /** Both are required by `entries_self_insert`, so the button needs them. */
+  allow_online_entry: boolean;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
 };
 
 export type RodeoEventRow = {
@@ -82,7 +88,7 @@ export async function listUpcomingRodeos(): Promise<RodeoSummary[]> {
     await supabase
       .from('rodeos')
       .select(
-        'id, name, slug, start_date, end_date, venue_name, venue_city, venue_state, venue_lat, venue_lng, status, entry_close_date, total_added_money',
+        'id, org_id, name, slug, start_date, end_date, venue_name, venue_city, venue_state, venue_lat, venue_lng, status, entry_close_date, total_added_money, allow_online_entry, contact_name, contact_phone, contact_email',
       )
       .in('status', ['published', 'entries_open', 'entries_closed', 'in_progress'])
       .gte('end_date', today)
@@ -97,7 +103,7 @@ export async function getRodeo(rodeoId: string): Promise<RodeoSummary> {
     await supabase
       .from('rodeos')
       .select(
-        'id, name, slug, start_date, end_date, venue_name, venue_city, venue_state, venue_lat, venue_lng, status, entry_close_date, total_added_money',
+        'id, org_id, name, slug, start_date, end_date, venue_name, venue_city, venue_state, venue_lat, venue_lng, status, entry_close_date, total_added_money, allow_online_entry, contact_name, contact_phone, contact_email',
       )
       .eq('id', rodeoId)
       .limit(1),
@@ -271,4 +277,128 @@ export async function logPracticeRun(
     org_id: null,
   });
   if (error) throw new Error(`Could not log that run: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// Entering
+// ---------------------------------------------------------------------------
+
+export type MyEntry = {
+  id: string;
+  rodeo_id: string;
+  rodeo_event_id: string;
+  status: string;
+  go_round_number: number;
+  draw_position: number | null;
+  performance_number: number | null;
+  entry_fee_amount: number | null;
+  fees_paid: boolean;
+  entered_at: string;
+  rodeos: {
+    name: string;
+    start_date: string;
+    end_date: string | null;
+    venue_city: string | null;
+    venue_state: string | null;
+    status: string;
+  } | null;
+};
+
+/**
+ * Everything this person is entered in, soonest first.
+ *
+ * Ordered by the rodeo's start date rather than when they entered, because the
+ * question a contestant is asking is "what is next", not "what did I do".
+ */
+export async function listMyEntries(profileId: string): Promise<MyEntry[]> {
+  return unwrap(
+    await supabase
+      .from('entries')
+      .select(
+        'id, rodeo_id, rodeo_event_id, status, go_round_number, draw_position, performance_number, entry_fee_amount, fees_paid, entered_at, rodeos(name, start_date, end_date, venue_city, venue_state, status)',
+      )
+      .eq('contestant_id', profileId)
+      .order('entered_at', { ascending: false })
+      .limit(100),
+    'Could not load your entries',
+  ) as unknown as MyEntry[];
+}
+
+/** Is this person already entered in this event? Drives the button state. */
+export async function findMyEntry(
+  profileId: string,
+  rodeoEventId: string,
+): Promise<{ id: string; status: string; draw_position: number | null } | null> {
+  const rows = unwrap(
+    await supabase
+      .from('entries')
+      .select('id, status, draw_position')
+      .eq('contestant_id', profileId)
+      .eq('rodeo_event_id', rodeoEventId)
+      .limit(1),
+    'Could not check your entry',
+  );
+  return rows[0] ?? null;
+}
+
+export type EnterResult = { ok: true; entryId: string } | { ok: false; message: string };
+
+/**
+ * Enter this app's event at a rodeo.
+ *
+ * The RLS policy `entries_self_insert` is the real gate: it requires the
+ * caller to be the contestant AND the rodeo to be `entries_open` with
+ * `allow_online_entry` set. Nothing here can widen that, and it is deliberately
+ * not re-checked in TypeScript beyond turning the resulting error into
+ * something a person can act on — two copies of an eligibility rule are two
+ * rules that will eventually disagree.
+ *
+ * `status` is left at its default of 'pending' and `fees_paid` at false. An
+ * entry is not confirmed by entering it; it is confirmed when the secretary
+ * takes the money, and Stripe is not wired yet. Marking it paid here would put
+ * a contestant on the draw sheet without the producer having been paid.
+ */
+export async function enterRodeoEvent(
+  profileId: string,
+  input: {
+    orgId: string;
+    rodeoId: string;
+    rodeoEventId: string;
+    entryFee: number | null;
+    horseId?: string | null;
+    notes?: string;
+  },
+): Promise<EnterResult> {
+  const { data, error } = await supabase
+    .from('entries')
+    .insert({
+      org_id: input.orgId,
+      rodeo_id: input.rodeoId,
+      rodeo_event_id: input.rodeoEventId,
+      contestant_id: profileId,
+      entry_fee_amount: input.entryFee,
+      horse_id: input.horseId ?? null,
+      notes: input.notes?.trim() || null,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    // 42501 is what RLS returns when the WITH CHECK fails, and it is by far the
+    // likeliest error here. "new row violates row-level security policy" means
+    // nothing to a roper standing in an arena.
+    if (error.code === '42501' || /row-level security/i.test(error.message)) {
+      return {
+        ok: false,
+        message:
+          'Entries are not open for this rodeo, or this producer is not taking them online. Call the number on the rodeo page.',
+      };
+    }
+    if (error.code === '23505') {
+      return { ok: false, message: 'You are already entered in this one.' };
+    }
+    return { ok: false, message: `Could not enter: ${error.message}` };
+  }
+
+  return { ok: true, entryId: data.id };
 }

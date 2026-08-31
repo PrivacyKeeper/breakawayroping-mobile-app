@@ -20,7 +20,14 @@ import { Screen } from '@/components/ui/Screen';
 import { Stat } from '@/components/ui/Stat';
 import { colors } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
-import { getMyProfile, listMyRuns, logPracticeRun, type CareerRun } from '@/lib/queries';
+import {
+  getMyProfile,
+  listMyEntries,
+  listMyRuns,
+  logPracticeRun,
+  type CareerRun,
+  type MyEntry,
+} from '@/lib/queries';
 
 /** Accepts "8.4" and "8". Rejects anything that is not a plausible run time. */
 function parseTime(input: string): { seconds: number } | { problem: string } {
@@ -121,6 +128,44 @@ function LogRunForm({ profileId, onDone }: { profileId: string; onDone: () => vo
   );
 }
 
+
+/**
+ * What you are entered in, and where you are in the draw.
+ *
+ * Above the run log on purpose: the draw is the single most-wanted piece of
+ * information in this sport, and today it is found by refreshing a Facebook
+ * page at eleven at night.
+ */
+function EntryRow({ entry }: { entry: MyEntry }) {
+  const rodeo = entry.rodeos;
+  const when = rodeo ? new Date(`${rodeo.start_date}T00:00:00`).toLocaleDateString() : '';
+  const place = rodeo ? [rodeo.venue_city, rodeo.venue_state].filter(Boolean).join(', ') : '';
+
+  return (
+    <Card
+      title={rodeo?.name ?? 'Rodeo'}
+      subtitle={[when, place].filter(Boolean).join(' · ') || undefined}
+    >
+      <View style={{ flexDirection: 'row', gap: 24, flexWrap: 'wrap' }}>
+        <Stat
+          label="Draw"
+          value={entry.draw_position ? String(entry.draw_position) : '—'}
+          hint={entry.draw_position ? undefined : 'Not posted yet'}
+        />
+        {entry.performance_number ? (
+          <Stat label="Perf" value={String(entry.performance_number)} />
+        ) : null}
+        <Stat
+          label="Fees"
+          value={entry.fees_paid ? 'Paid' : 'Due'}
+          hint={entry.fees_paid ? undefined : 'With the secretary'}
+        />
+        <Stat label="Status" value={entry.status} />
+      </View>
+    </Card>
+  );
+}
+
 function RunRow({ run }: { run: CareerRun }) {
   const official = run.source !== 'self_reported';
   return (
@@ -160,6 +205,21 @@ export function CompeteScreen() {
     enabled: Boolean(profileId),
   });
 
+  const entriesQuery = useQuery({
+    queryKey: ['entries', profileId],
+    queryFn: () => listMyEntries(profileId!),
+    enabled: Boolean(profileId),
+  });
+
+  // Only what is still ahead. A rodeo that has settled belongs in the run log
+  // below, not in a list of things you are entered in.
+  const liveEntries = (entriesQuery.data ?? []).filter(
+    (e) =>
+      !['scratched', 'turned_out', 'no_show', 'cancelled'].includes(e.status) &&
+      e.rodeos !== null &&
+      !['completed', 'results_official', 'settled', 'cancelled'].includes(e.rodeos.status),
+  );
+
   if (logging && profileId) {
     return (
       <Screen>
@@ -170,6 +230,17 @@ export function CompeteScreen() {
 
   return (
     <Screen>
+      {liveEntries.length > 0 ? (
+        <View style={{ gap: 12 }}>
+          <Text style={{ color: colors.text, fontSize: 18, fontWeight: '600' }}>
+            You are entered
+          </Text>
+          {liveEntries.map((entry) => (
+            <EntryRow key={entry.id} entry={entry} />
+          ))}
+        </View>
+      ) : null}
+
       <QueryBoundary
         isLoading={profileQuery.isLoading || runsQuery.isLoading}
         error={profileQuery.error ?? runsQuery.error}

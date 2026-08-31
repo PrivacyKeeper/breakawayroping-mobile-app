@@ -3,11 +3,12 @@
 // One rodeo: where it is, what the ground is doing, and what this app's event
 // pays. This is the screen the map, weather and pin components were built for.
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Linking, Text, View } from 'react-native';
 
 import { ArenaMap } from '@/components/ArenaMap';
+import { Button } from '@/components/ui/Button';
 import { PinDrop } from '@/components/PinDrop';
 import { WeatherWidget } from '@/components/WeatherWidget';
 import { Card } from '@/components/ui/Card';
@@ -16,14 +17,150 @@ import { Screen } from '@/components/ui/Screen';
 import { Stat } from '@/components/ui/Stat';
 import { app as appMeta, colors } from '@/constants/theme';
 import type { Coordinates, PlacedPin } from '@/lib/location';
-import { getEventForRodeo, getRodeo } from '@/lib/queries';
+import { useSession } from '@/lib/auth';
+import {
+  enterRodeoEvent,
+  findMyEntry,
+  getEventForRodeo,
+  getMyProfile,
+  getRodeo,
+  type RodeoEventRow,
+  type RodeoSummary,
+} from '@/lib/queries';
 
 function money(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—';
   return `$${Number(value).toLocaleString()}`;
 }
 
+
+/**
+ * The enter button, and every reason it might not be one.
+ *
+ * The eligibility rule itself lives in the `entries_self_insert` policy, not
+ * here. What this does is explain the outcome: a contestant who cannot enter
+ * online needs the producer's phone number, not a greyed-out button.
+ */
+function EntryCard({
+  rodeo,
+  event,
+  profileId,
+}: {
+  rodeo: RodeoSummary;
+  event: RodeoEventRow;
+  profileId: string | undefined;
+}) {
+  const queryClient = useQueryClient();
+
+  const entryQuery = useQuery({
+    queryKey: ['my-entry', profileId, event.id],
+    queryFn: () => findMyEntry(profileId!, event.id),
+    enabled: Boolean(profileId),
+  });
+
+  const enter = useMutation({
+    mutationFn: async () => {
+      if (!profileId) throw new Error('Sign in to enter.');
+      const result = await enterRodeoEvent(profileId, {
+        orgId: rodeo.org_id,
+        rodeoId: rodeo.id,
+        rodeoEventId: event.id,
+        entryFee: event.entry_fee,
+      });
+      if (!result.ok) throw new Error(result.message);
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-entry', profileId, event.id] });
+      queryClient.invalidateQueries({ queryKey: ['entries', profileId] });
+    },
+  });
+
+  const existing = entryQuery.data;
+
+  if (existing) {
+    return (
+      <Card
+        title="You are entered"
+        subtitle={
+          existing.draw_position
+            ? `You are ${existing.draw_position} in the draw.`
+            : 'The draw is not posted yet. You will see your position here as soon as it is.'
+        }
+      >
+        <Text style={{ color: colors.muted, fontSize: 13 }}>
+          {existing.status === 'pending'
+            ? 'Entry taken, fees still to settle with the secretary.'
+            : `Status: ${existing.status}.`}
+        </Text>
+        <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>
+          Need to turn out? Ring the secretary — turnouts have notice rules and a
+          deadline, and doing it through a person is what keeps you off a fine.
+        </Text>
+        {rodeo.contact_phone ? (
+          <Button
+            label={`Call ${rodeo.contact_name ?? 'the secretary'}`}
+            variant="secondary"
+            onPress={() => Linking.openURL(`tel:${rodeo.contact_phone}`)}
+          />
+        ) : null}
+      </Card>
+    );
+  }
+
+  const canEnterOnline = rodeo.status === 'entries_open' && rodeo.allow_online_entry;
+
+  if (!canEnterOnline) {
+    return (
+      <Card
+        title={rodeo.status === 'entries_open' ? 'Entries are by phone' : 'Entries are not open'}
+        subtitle={
+          rodeo.status === 'entries_open'
+            ? 'This producer is not taking entries in the app. The number below reaches whoever is running the books.'
+            : 'Nothing to enter yet. This page will let you in the moment the producer opens the books.'
+        }
+      >
+        {rodeo.contact_phone ? (
+          <Button
+            label="Call the secretary"
+            variant="secondary"
+            onPress={() => Linking.openURL(`tel:${rodeo.contact_phone}`)}
+          />
+        ) : null}
+      </Card>
+    );
+  }
+
+  return (
+    <Card
+      title="Enter"
+      subtitle={
+        event.entry_fee
+          ? `${money(event.entry_fee)} entry fee, settled with the secretary — nothing is charged here.`
+          : 'Nothing is charged here; fees are settled with the secretary.'
+      }
+    >
+      {enter.error ? (
+        <Text style={{ color: colors.danger, fontSize: 13, lineHeight: 19 }}>
+          {enter.error instanceof Error ? enter.error.message : 'Could not enter.'}
+        </Text>
+      ) : null}
+      <Button
+        label={enter.isPending ? 'Entering…' : `Enter the ${appMeta.eventLabel.toLowerCase()}`}
+        onPress={() => enter.mutate()}
+        disabled={enter.isPending || !profileId}
+      />
+    </Card>
+  );
+}
+
 export function RodeoDetailScreen({ rodeoId }: { rodeoId: string }) {
+  const { user } = useSession();
+  const profileQuery = useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: () => getMyProfile(user!.id),
+    enabled: Boolean(user?.id),
+  });
   // Where the contestant parked, not where the arena is. Kept on the device:
   // nobody else needs to know where somebody's trailer is, and there is no
   // column for it. It survives for the session, which is the trip that matters.
@@ -107,6 +244,7 @@ export function RodeoDetailScreen({ rodeoId }: { rodeoId: string }) {
               >
                 {(event) =>
                   event ? (
+                    <View style={{ gap: 24 }}>
                     <Card title={appMeta.eventLabel}>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 24 }}>
                         <Stat label="Entry fee" value={money(event.entry_fee)} />
@@ -126,6 +264,9 @@ export function RodeoDetailScreen({ rodeoId }: { rodeoId: string }) {
                         </Text>
                       ) : null}
                     </Card>
+
+                    <EntryCard rodeo={rodeo} event={event} profileId={profileQuery.data?.id} />
+                    </View>
                   ) : null
                 }
               </QueryBoundary>
