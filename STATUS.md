@@ -52,9 +52,28 @@ Covers phases 0–2 of the build map plus the rule-versioning architecture the
 into version control. Right now the database is ahead of this repo. Details in
 `supabase/migrations/README.md`.
 
-### Mobile app — **not started**
+### Mobile app — **scaffolded and building**
 
-This repo has migrations and docs only. No Expo scaffold yet.
+Expo 55 + expo-router, on the portfolio's shared spine. Both platforms produce
+a release Hermes bundle.
+
+- `lib/scoring/breakaway` — `BR_PENALTIES`, `scoreBreakawayRun`,
+  `breakdownSegments`, 11 tests. The barrier is `requireNumber`, so a profile
+  that does not state its penalty is refused rather than guessed at: WPRA and
+  PRCA assess 10 seconds and a USTRC-style roping assesses 5, and in an event
+  won by hundredths a wrong barrier is the whole result.
+- Early breakaway and a rope that never broke are modelled as separate calls.
+  Both are no times, and the difference is what the roper is told: "your string
+  is set too light" versus "you never got tight".
+- `lib/pose/event.ts` — breakaway feature vector and an 8-fault taxonomy,
+  weighted to the box and the delivery because there is no second half of the
+  run to make time up in.
+- Auth, events, rodeo detail with map/weather/pin-drop, practice-run logging
+  and profile, all against the shared Rodeo-OS database.
+
+Still missing, and shared with the rest of the portfolio: no pose model is
+connected, so `/analyze` shows the fault taxonomy rather than filming a run.
+Stripe is deliberately not wired yet.
 
 ## Next up, in order
 

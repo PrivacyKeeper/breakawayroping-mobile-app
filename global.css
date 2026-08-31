@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "uniwind";
+
+/* Palette read from the shipped tiedown.pro stylesheet, so the app
+   matches the site a user just came from. */
+@theme {
+  --color-background: #12100e;
+  --color-surface: #1b1815;
+  --color-card: #221e1a;
+  --color-border: #3a332c;
+  --color-text: #e2d6c1;
+  --color-muted: #ab9a84;
+  --color-accent: #e2701f;
+  --color-accentAlt: #f4ead9;
+  --color-cream: #f4ead9;
+  --color-success: #4ba36b;
+  --color-warning: #d99a2b;
+  --color-danger: #c8503f;
+}
