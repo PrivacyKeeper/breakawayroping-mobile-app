@@ -16,7 +16,7 @@
 // 'tie_down_roping'. Getting this wrong shows a bareback rider the tie-down
 // draw.
 
-import { app as appMeta } from '@/constants/theme';
+import { app as appMeta, primaryEvent } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -29,8 +29,16 @@ import { supabase } from '@/lib/supabase';
  */
 export const EVENT_CODES = appMeta.eventCodes;
 
-/** The code new self-reported runs are filed under: this app's primary event. */
-export const PRIMARY_EVENT_CODE = appMeta.eventCodes[0];
+/**
+ * The event a run is filed under when nothing says otherwise.
+ *
+ * A default, not an assumption: every app here covers more than one code
+ * except tie-down, and they are not interchangeable. Filing every practice run
+ * under the first one made a heeler's run a header's run and collapsed ranch
+ * rodeo's ten events into ranch bronc. The practice log asks; this is only
+ * what a single-event app gets to skip asking about.
+ */
+export const PRIMARY_EVENT_CODE = primaryEvent.code;
 
 export type RodeoSummary = {
   id: string;
@@ -270,13 +278,27 @@ export async function logPracticeRun(
     timeSeconds: number | null;
     /** Marked score out of 100, for a judged event. Null on a timed one. */
     score: number | null;
+    /**
+     * Which of this app's events the run was in. Defaults to the primary,
+     * which is only ever right when the app covers exactly one.
+     */
+    eventCode?: string;
     note?: string;
   },
 ): Promise<void> {
+  const eventCode = run.eventCode ?? PRIMARY_EVENT_CODE;
+
+  // Fail loudly rather than write a run under a code this app does not cover.
+  // A silently wrong code is invisible: the row saves, and it surfaces months
+  // later as a career record for an event the person does not compete in.
+  if (!EVENT_CODES.includes(eventCode)) {
+    throw new Error(`"${eventCode}" is not an event this app covers.`);
+  }
+
   const { error } = await supabase.from('career_runs').insert({
     contestant_id: profileId,
     rodeo_name: run.rodeoName.trim() || 'Practice',
-    event_code: PRIMARY_EVENT_CODE,
+    event_code: eventCode,
     run_date: run.runDate,
     // Both columns are written every time, one of them null. A judged ride
     // filed in `final_time` reads back as an 82-second run, and nothing

@@ -18,7 +18,7 @@ import { Field } from '@/components/ui/Field';
 import { QueryBoundary } from '@/components/ui/QueryBoundary';
 import { Screen } from '@/components/ui/Screen';
 import { Stat } from '@/components/ui/Stat';
-import { app, colors } from '@/constants/theme';
+import { app, colors, primaryEvent } from '@/constants/theme';
 import { useSession } from '@/lib/auth';
 import {
   getMyProfile,
@@ -63,8 +63,11 @@ function parseScore(input: string): { score: number } | { problem: string } {
 /**
  * How a run is written down here follows the event, not the app template.
  *
- * "either" is ranch rodeo, where the card mixes a judged bronc ride with timed
- * events, so the person logging it has to say which one this was.
+ * Every app but tie-down covers more than one event, and they are not
+ * interchangeable: heading and heeling are two ends of the same run, chute
+ * dogging is not steer wrestling, and ranch rodeo is a card of ten. So the
+ * event is asked for whenever there is more than one, and it decides both the
+ * code the run is filed under and whether the number is a time or a score.
  */
 function LogRunForm({ profileId, onDone }: { profileId: string; onDone: () => void }) {
   const today = new Date().toISOString().slice(0, 10);
@@ -73,14 +76,11 @@ function LogRunForm({ profileId, onDone }: { profileId: string; onDone: () => vo
   const [runDate, setRunDate] = useState(today);
   const [note, setNote] = useState('');
   const [touched, setTouched] = useState(false);
-  // Only asked when the app covers both, and it starts on the judged one
-  // because that is the event ranch rodeo people call a "ride".
-  const [kind, setKind] = useState<'time' | 'score'>(
-    app.resultKind === 'time' ? 'time' : 'score',
-  );
+  const [eventCode, setEventCode] = useState<string>(primaryEvent.code);
   const queryClient = useQueryClient();
 
-  const judged = app.resultKind === 'score' || (app.resultKind === 'either' && kind === 'score');
+  const event = app.events.find((e) => e.code === eventCode) ?? primaryEvent;
+  const judged = event.resultKind === 'score';
 
   const parsed = judged ? parseScore(value) : parseTime(value);
   const valueProblem = 'problem' in parsed ? parsed.problem : undefined;
@@ -93,6 +93,7 @@ function LogRunForm({ profileId, onDone }: { profileId: string; onDone: () => vo
         runDate,
         timeSeconds: 'seconds' in parsed ? parsed.seconds : null,
         score: 'score' in parsed ? parsed.score : null,
+        eventCode: event.code,
         note,
       }),
     onSuccess: () => {
@@ -115,21 +116,24 @@ function LogRunForm({ profileId, onDone }: { profileId: string; onDone: () => vo
           placeholder="Home arena"
           hint="A practice pen counts. Leave it blank and it is filed as Practice."
         />
-        {app.resultKind === 'either' ? (
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <View style={{ flex: 1 }}>
-              <Button
-                label="Judged ride"
-                variant={kind === 'score' ? 'primary' : 'secondary'}
-                onPress={() => setKind('score')}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Button
-                label="Timed event"
-                variant={kind === 'time' ? 'primary' : 'secondary'}
-                onPress={() => setKind('time')}
-              />
+        {app.events.length > 1 ? (
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: colors.muted, fontSize: 13, fontWeight: '600' }}>Event</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {app.events.map((option) => (
+                <Button
+                  key={option.code}
+                  label={option.label}
+                  variant={option.code === event.code ? 'primary' : 'secondary'}
+                  onPress={() => {
+                    // The field changes meaning between a time and a score, so
+                    // a number typed for the old event must not be carried
+                    // over and silently filed as the new one.
+                    if (option.resultKind !== event.resultKind) setValue('');
+                    setEventCode(option.code);
+                  }}
+                />
+              ))}
             </View>
           </View>
         ) : null}
@@ -225,22 +229,36 @@ function EntryRow({ entry }: { entry: MyEntry }) {
 /**
  * A run reads back in whatever it was measured in.
  *
- * The column is checked rather than the app's `resultKind`, because an official
- * row arrives from the platform and a mixed card can carry either — ranch
- * rodeo writes a judged bronc ride and a timed sorting run into the same list.
+ * The column is checked before anything else, because an official row arrives
+ * from the platform and a mixed card carries both — ranch rodeo writes a
+ * judged bronc ride and a timed sorting run into the same list. Only when a
+ * run has neither does the event decide what is missing, so a bronc rider is
+ * told "No score" rather than "No time".
  */
 function describeRun(run: CareerRun): string {
   if (run.final_score !== null) return `${Number(run.final_score).toFixed(0)} points`;
   if (run.final_time !== null) return `${Number(run.final_time).toFixed(2)}s`;
-  return app.resultKind === 'score' ? 'No score' : 'No time';
+  const kind = app.events.find((e) => e.code === run.event_code)?.resultKind;
+  return kind === 'score' ? 'No score' : 'No time';
+}
+
+/** The event's own name, for an app that covers more than one. */
+function labelForRun(run: CareerRun): string | null {
+  if (app.events.length < 2) return null;
+  return app.events.find((e) => e.code === run.event_code)?.label ?? run.event_code;
 }
 
 function RunRow({ run }: { run: CareerRun }) {
   const official = run.source !== 'self_reported';
+  // Which end you roped is the whole difference between two rows that
+  // otherwise look identical, so it goes on the line you actually read.
+  const eventLabel = labelForRun(run);
   return (
     <Card
       title={describeRun(run)}
-      subtitle={`${run.rodeo_name} · ${new Date(`${run.run_date}T00:00:00`).toLocaleDateString()}`}
+      subtitle={[eventLabel, run.rodeo_name, new Date(`${run.run_date}T00:00:00`).toLocaleDateString()]
+        .filter(Boolean)
+        .join(' · ')}
     >
       <View style={{ flexDirection: 'row', gap: 24, alignItems: 'flex-start' }}>
         {run.place ? <Stat label="Place" value={String(run.place)} /> : null}

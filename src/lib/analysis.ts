@@ -12,7 +12,7 @@ import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 
-import { app as appMeta } from '@/constants/theme';
+import { app as appMeta, primaryEvent } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 
 /**
@@ -177,9 +177,25 @@ async function uploadFrame(
 export async function analyseRun(
   videoUri: string,
   durationMs: number | null,
-  options: { careerRunId?: string | null; onProgress?: (p: Progress) => void } = {},
+  options: {
+    careerRunId?: string | null;
+    /**
+     * Which of this app's events the clip is of. Defaults to the primary,
+     * which is only ever right when the app covers exactly one.
+     */
+    eventCode?: string;
+    onProgress?: (p: Progress) => void;
+  } = {},
 ): Promise<AnalyseResult> {
-  const { careerRunId = null, onProgress } = options;
+  const { careerRunId = null, eventCode = primaryEvent.code, onProgress } = options;
+
+  // The event decides which fault vocabulary the analyser marks against and
+  // what the stored row says the person was doing. Sending the app's first
+  // code regardless filed a heeler's clip as a header's, and marked a ranch
+  // bronc ride against the saddle bronc list.
+  if (!appMeta.eventCodes.includes(eventCode)) {
+    return { ok: false, message: `"${eventCode}" is not an event this app covers.` };
+  }
 
   const { data: sessionData } = await supabase.auth.getSession();
   const session = sessionData.session;
@@ -232,7 +248,7 @@ export async function analyseRun(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        event_code: appMeta.eventCodes[0],
+        event_code: eventCode,
         frame_urls: frameUrls,
         frame_times_ms: frames.map((f) => f.timeMs),
         video_duration_ms: durationMs,

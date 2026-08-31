@@ -276,15 +276,72 @@ describe('queries.ts over HTTP', () => {
     assert.equal(request.body.final_score, null);
   });
 
-  test('this app asks for the measurement its event is actually judged in', async () => {
-    // `resultKind` drives the label, the validation and the column, so it has
-    // to match what the scoring module models. A timed app that claimed to be
-    // judged would ask a tie-down roper for a score out of 100.
-    const theme = await import('../src/constants/theme.ts');
-    assert.ok(
-      ['time', 'score', 'either'].includes(theme.app.resultKind),
-      `resultKind is ${theme.app.resultKind}`,
+  test('a run is filed under the event it was actually in', async () => {
+    // The bug this pins: every practice run went in under `eventCodes[0]`.
+    // In team roping that made a heeler's run a header's run; in ranch rodeo
+    // it collapsed ten events into ranch bronc. Neither shows up as an error
+    // — the row saves, and it is wrong months later in somebody's record.
+    const last = EVENT_CODES[EVENT_CODES.length - 1];
+
+    await queries.logPracticeRun('u1', {
+      rodeoName: 'Home arena',
+      runDate: '2026-08-30',
+      timeSeconds: 8.4,
+      score: null,
+      eventCode: last,
+    });
+
+    assert.equal(server.requests.at(-1).body.event_code, last);
+  });
+
+  test('a run cannot be filed under an event this app does not cover', async () => {
+    // Loud rather than quiet on purpose. A code from another app would save
+    // fine and surface as a career record for an event the person does not
+    // compete in.
+    const before = server.requests.length;
+
+    await assert.rejects(
+      () =>
+        queries.logPracticeRun('u1', {
+          rodeoName: 'Home arena',
+          runDate: '2026-08-30',
+          timeSeconds: 8.4,
+          score: null,
+          eventCode: 'barrel_racing',
+        }),
+      /not an event this app covers/,
     );
+
+    // And it is refused before the request, not after the row is written.
+    assert.equal(server.requests.length, before);
+  });
+
+  test('the app-level result kind agrees with its own event list', async () => {
+    // `resultKind` is written by hand and read by `scripts/verify-live.mjs`,
+    // which cannot import TypeScript. Two sources for one fact is how they
+    // drift, so this is the thing that keeps them honest.
+    const theme = await import('../src/constants/theme.ts');
+    const kinds = new Set(theme.app.events.map((e) => e.resultKind));
+    const expected = kinds.size > 1 ? 'either' : [...kinds][0];
+
+    assert.equal(theme.app.resultKind, expected);
+  });
+
+  test('every event this app lists has a code, a label and a measurement', async () => {
+    const theme = await import('../src/constants/theme.ts');
+    assert.ok(theme.app.events.length > 0, 'an app with no events cannot filter anything');
+
+    for (const event of theme.app.events) {
+      assert.match(event.code, /^[a-z0-9_]+$/, `bad code: ${event.code}`);
+      assert.ok(event.label.trim().length > 0, `${event.code} has no label`);
+      assert.ok(
+        ['time', 'score'].includes(event.resultKind),
+        `${event.code} has resultKind ${event.resultKind}`,
+      );
+    }
+
+    // The codes and the list are one fact, so they must not diverge.
+    assert.deepEqual(theme.app.eventCodes, theme.app.events.map((e) => e.code));
   });
 
   test('enterRodeoEvent creates a pending, unpaid entry', async () => {

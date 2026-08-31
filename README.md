@@ -37,6 +37,40 @@ src/constants/      Theme and app identity.
 supabase/migrations/
 ```
 
+## The events this app covers
+
+`src/constants/theme.ts` holds an `EVENTS` list, and it is the only place that
+knows which events this app is about:
+
+```ts
+const EVENTS = [
+  { code: "team_roping_header", label: "Heading", resultKind: "time" },
+  { code: "team_roping_heeler", label: "Heeling", resultKind: "time" },
+] as const;
+```
+
+Three things depend on getting this right.
+
+**The codes are the database's, not the app's.** `app.eventType` is the app's
+own slug and matches no row in `reference_options` — filtering on it returns an
+empty set with no error, which renders as "the producer is not running your
+event" at every rodeo in the list.
+
+**The entries are not interchangeable.** Every app here but tie-down covers
+more than one, and the first version reached for `eventCodes[0]` wherever a
+code was needed. That filed a heeler's practice run and a heeler's video
+analysis under the header's code, and collapsed ranch rodeo's ten events into
+ranch bronc. Nothing errored; it was simply wrong in somebody's record months
+later. So the practice log and the analyser ask which event, and
+`src/lib/events.test.ts` fails the build if any module picks one by index.
+
+**`resultKind` is per event, because it varies within a card.** Roughstock is
+judged — two judges marking the horse and the rider out of 25 each, with the
+eight seconds a pass/fail gate rather than the result — and everything else is
+on the clock. Ranch rodeo is genuinely both. The form's label, its validation
+range and the column written all follow it, so a bronc rider is asked for a
+score and a roper for a time.
+
 ## The rule engine
 
 `src/lib/scoring/` is the part that must not be hand-waved — it decides

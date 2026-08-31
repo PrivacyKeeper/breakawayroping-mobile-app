@@ -68,24 +68,25 @@ function loadEnv() {
 function readTheme() {
   const source = readFileSync(join(root, 'src', 'constants', 'theme.ts'), 'utf8');
 
-  const codesMatch = source.match(/eventCodes:\s*\[([^\]]*)\]/);
-  if (!codesMatch) {
-    console.error('Could not find `eventCodes` in src/constants/theme.ts.');
-    process.exit(2);
-  }
-  const eventCodes = [...codesMatch[1].matchAll(/["']([a-z0-9_]+)["']/g)].map((m) => m[1]);
-  if (eventCodes.length === 0) {
-    console.error('`eventCodes` in src/constants/theme.ts is empty.');
+  // Each entry of the EVENTS list, in order. Read by regex rather than by
+  // importing the module: this is plain Node with no bundler and no alias
+  // resolution, and a regex over a well-known literal is less machinery than
+  // a loader hook. `npm test` asserts the shape this depends on.
+  const events = [
+    ...source.matchAll(
+      /\{\s*code:\s*["']([a-z0-9_]+)["'],\s*label:\s*["']([^"']+)["'],\s*resultKind:\s*["'](time|score)["']\s*\}/g,
+    ),
+  ].map((m) => ({ code: m[1], label: m[2], resultKind: m[3] }));
+
+  if (events.length === 0) {
+    console.error(
+      'Could not read the EVENTS list out of src/constants/theme.ts.\n' +
+        'If its shape changed, this script has to change with it.',
+    );
     process.exit(2);
   }
 
-  const kindMatch = source.match(/resultKind:\s*["'](time|score|either)["']/);
-  if (!kindMatch) {
-    console.error('Could not find `resultKind` in src/constants/theme.ts.');
-    process.exit(2);
-  }
-
-  return { eventCodes, resultKind: kindMatch[1] };
+  return events;
 }
 
 const env = { ...loadEnv(), ...process.env };
@@ -100,13 +101,16 @@ if (!URL || !KEY) {
   process.exit(2);
 }
 
-const { eventCodes: EVENT_CODES, resultKind: RESULT_KIND } = readTheme();
-const EVENT_CODE = EVENT_CODES[0];
+const EVENTS = readTheme();
+const EVENT_CODES = EVENTS.map((e) => e.code);
+const EVENT = EVENTS[0];
+const EVENT_CODE = EVENT.code;
 
-// Roughstock is judged out of 100 and everything else is on the clock, so the
-// run this script writes has to be shaped like the event or the check would
-// prove the wrong column accepts a number.
-const JUDGED = RESULT_KIND === 'score';
+// Roughstock is judged out of 100 and everything else is on the clock, and on
+// a mixed card that varies event by event — so the run this script writes is
+// shaped by the event it is written under, not by the app. Otherwise the check
+// would only prove that the wrong column accepts a number.
+const JUDGED = EVENT.resultKind === 'score';
 const RESULT = JUDGED ? { final_score: 82, final_time: null } : { final_time: 8.4, final_score: null };
 
 // --- tiny harness -----------------------------------------------------------

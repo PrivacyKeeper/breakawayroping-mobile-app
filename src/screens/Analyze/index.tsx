@@ -18,7 +18,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { QueryBoundary } from '@/components/ui/QueryBoundary';
 import { Screen } from '@/components/ui/Screen';
 import { Stat } from '@/components/ui/Stat';
-import { app as appMeta, colors, radius } from '@/constants/theme';
+import { app as appMeta, colors, primaryEvent, radius } from '@/constants/theme';
 import {
   analyseRun,
   deleteAnalysis,
@@ -199,6 +199,12 @@ function HistoryRow({
   onOpen: (analysis: RunAnalysis) => void;
 }) {
   const when = new Date(row.created_at).toLocaleDateString();
+  // Two clips analysed on the same day are otherwise indistinguishable in this
+  // list, and in an app that covers both ends of a run the end is the point.
+  const eventLabel =
+    appMeta.events.length > 1
+      ? (appMeta.events.find((e) => e.code === row.event_code)?.label ?? row.event_code)
+      : null;
 
   if (row.status === 'failed') {
     return (
@@ -224,6 +230,9 @@ function HistoryRow({
         opacity: pressed ? 0.85 : 1,
       })}
     >
+      {eventLabel ? (
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: '600' }}>{eventLabel}</Text>
+      ) : null}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Stat label="Score" value={`${Math.round(row.overall_score ?? 0)}`} />
         <Stat label="Faults" value={String(row.fault_codes.length)} hint={when} />
@@ -238,6 +247,9 @@ export function AnalyzeScreen() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [current, setCurrent] = useState<RunAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Which event the clip is of. Only asked when this app covers more than one,
+  // which is every app here except tie-down.
+  const [eventCode, setEventCode] = useState<string>(primaryEvent.code);
 
   const profileQuery = useQuery({
     queryKey: ['profile', user?.id],
@@ -265,6 +277,7 @@ export function AnalyzeScreen() {
       }
 
       const result = await analyseRun(picked.uri, picked.durationMs, {
+        eventCode,
         onProgress: setProgress,
       });
       setProgress(null);
@@ -303,7 +316,30 @@ export function AnalyzeScreen() {
           <ActivityIndicator color={colors.accent} />
         </Card>
       ) : (
-        <Button label="Analyse a run" onPress={() => run.mutate()} />
+        <View style={{ gap: 12 }}>
+          {appMeta.events.length > 1 ? (
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: colors.muted, fontSize: 13, fontWeight: '600' }}>
+                What is this a run of?
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {appMeta.events.map((option) => (
+                  <Button
+                    key={option.code}
+                    label={option.label}
+                    variant={option.code === eventCode ? 'primary' : 'secondary'}
+                    onPress={() => setEventCode(option.code)}
+                  />
+                ))}
+              </View>
+              <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>
+                The analyser marks against a different list of faults for each one, so this has to
+                be right.
+              </Text>
+            </View>
+          ) : null}
+          <Button label="Analyse a run" onPress={() => run.mutate()} />
+        </View>
       )}
 
       {error ? (
